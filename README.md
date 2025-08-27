@@ -249,3 +249,6 @@ type SearchTool struct {
 6. Add monitoring and observability
 
 This system demonstrates the core patterns you'll see in AI infrastructure while using familiar backend development concepts.
+
+https://python.langchain.com/docs/integrations/providers/unstructured/
+https://python.langchain.com/docs/integrations/providers/unstructured/
