@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	_ "github.com/marcboeker/go-duckdb"
+	_ "github.com/marcboeker/go-duckdb/v2"
 )
 
 // DocumentChunk represents a piece of a document with its embedding
@@ -69,6 +69,7 @@ func (vdb *VectorDB) setupTables() error {
 	queries := []string{
 		"INSTALL vss;",
 		"LOAD vss;",
+		"SET hnsw_enable_experimental_persistence=TRUE;",
 		`CREATE TABLE IF NOT EXISTS documents (
 			id VARCHAR PRIMARY KEY,
 			content TEXT NOT NULL,
@@ -111,7 +112,7 @@ func (vdb *VectorDB) SearchSimilar(queryVector []float32, limit int) ([]SearchRe
 	vectorStr := vectorToString(queryVector)
 
 	query := `SELECT id, content, file_path, chunk_id, 
-			         cosine_similarity(embedding, ?::FLOAT[]) as similarity
+					 array_cosine_distance(embedding, ?::FLOAT[384]) as similarity
 			  FROM documents 
 			  ORDER BY similarity DESC 
 			  LIMIT ?`
@@ -464,7 +465,7 @@ func setupRoutes(ragService *RAGService, docProcessor *DocumentProcessor) *gin.E
 
 func main() {
 	// Initialize DuckDB with vector search
-	vdb, err := NewVectorDB("./documents.duckdb")
+	vdb, err := NewVectorDB("./grey-seal.duckdb")
 	if err != nil {
 		log.Fatal("Failed to initialize vector database:", err)
 	}
