@@ -8,6 +8,8 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	greyseal "github.com/holmes89/grey-seal/lib"
 )
 
 // MCP Protocol Types
@@ -75,12 +77,12 @@ type ServerInfo struct {
 
 // MCPServer wraps our RAG service for MCP protocol
 type MCPServer struct {
-	ragService *RAGService
+	RagService *greyseal.RAGService
 }
 
-func NewMCPServer(ragService *RAGService) *MCPServer {
+func NewMCPServer(ragService *greyseal.RAGService) *MCPServer {
 	return &MCPServer{
-		ragService: ragService,
+		RagService: ragService,
 	}
 }
 
@@ -208,13 +210,13 @@ func (s *MCPServer) handleSearchDocuments(id interface{}, args map[string]interf
 	}
 
 	// Generate embedding for search
-	queryVector, err := s.ragService.embeddings.GenerateEmbedding(query)
+	queryVector, err := s.RagService.GenerateEmbedding(query)
 	if err != nil {
 		return s.errorResponse(id, -32603, "Failed to generate embedding", err)
 	}
 
 	// Search documents
-	results, err := s.ragService.vectorDB.SearchSimilar(queryVector, limit)
+	results, err := s.RagService.VectorDB.SearchSimilar(queryVector, limit)
 	if err != nil {
 		return s.errorResponse(id, -32603, "Search failed", err)
 	}
@@ -256,7 +258,7 @@ func (s *MCPServer) handleAskDocuments(id interface{}, args map[string]interface
 	}
 
 	// Perform RAG query
-	response, err := s.ragService.Query(context.Background(), question, limit)
+	response, err := s.RagService.Query(context.Background(), question, limit)
 	if err != nil {
 		return s.errorResponse(id, -32603, "RAG query failed", err)
 	}
