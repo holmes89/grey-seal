@@ -60,7 +60,7 @@ func (vdb *VectorDBImpl) setupTables() error {
 			content TEXT NOT NULL,
 			file_path VARCHAR NOT NULL,
 			chunk_id INTEGER NOT NULL,
-			embedding FLOAT[384]
+			embedding FLOAT[768]
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_documents_embedding ON documents USING HNSW (embedding) WITH (metric = 'cosine');`,
 	}
@@ -87,7 +87,7 @@ func (vdb *VectorDBImpl) SearchSimilar(queryVector []float32, limit int) ([]grey
 		limit = 5
 	}
 	vectorStr := greyseal.VectorToString(queryVector)
-	query := `SELECT id, content, file_path, chunk_id, array_cosine_distance(embedding, ?::FLOAT[384]) as similarity FROM documents ORDER BY similarity DESC LIMIT ?`
+	query := `SELECT id, content, file_path, chunk_id, array_cosine_distance(embedding, ?::FLOAT[768]) as similarity FROM documents ORDER BY similarity DESC LIMIT ?`
 	rows, err := vdb.conn.QueryContext(context.Background(), query, vectorStr, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search: %w", err)

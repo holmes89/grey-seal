@@ -20,7 +20,7 @@ func main() {
 		log.Fatal("Failed to initialize vector database:", err)
 	}
 	defer vdb.Close()
-	embeddings := embedding.NewEmbeddingService()
+	embeddings := embedding.NewOllamaEmbeddingServiceFromEnvironment("nomic-embed-text")
 	docProcessor := docproc.NewDocumentProcessor(vdb, embeddings)
 	ragService := rag.NewRAGService(vdb, embeddings)
 	handler := rest.NewRestHandler(ragService, docProcessor)

@@ -2,7 +2,6 @@ package rag
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -59,38 +58,38 @@ func (rs *RAGServiceImpl) Query(ctx context.Context, query string, limit int) (*
 	}, nil
 }
 
-func (rs *RAGServiceImpl) generateAnswer(ctx context.Context, query, context string) (string, error) {
-	prompt := fmt.Sprintf(`You are a helpful assistant. Use the following context to answer the question accurately and concisely.\n\nContext:\n%s\n\nQuestion: %s\n\nAnswer:`, context, query)
-	reqBody := map[string]interface{}{
-		"model":  rs.llmModel,
-		"prompt": prompt,
-		"stream": false,
-	}
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, "POST", rs.llmURL+"/api/generate", strings.NewReader(string(jsonData)))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := rs.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to call Ollama: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Ollama returned status %d", resp.StatusCode)
-	}
-	var response struct {
-		Response string `json:"response"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-	return response.Response, nil
-}
+// func (rs *RAGServiceImpl) generateAnswer(ctx context.Context, query, context string) (string, error) {
+// 	prompt := fmt.Sprintf(`You are a helpful assistant. Use the following context to answer the question accurately and concisely.\n\nContext:\n%s\n\nQuestion: %s\n\nAnswer:`, context, query)
+// 	reqBody := map[string]interface{}{
+// 		"model":  rs.llmModel,
+// 		"prompt": prompt,
+// 		"stream": false,
+// 	}
+// 	jsonData, err := json.Marshal(reqBody)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to marshal request: %w", err)
+// 	}
+// 	req, err := http.NewRequestWithContext(ctx, "POST", rs.llmURL+"/api/generate", strings.NewReader(string(jsonData)))
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to create request: %w", err)
+// 	}
+// 	req.Header.Set("Content-Type", "application/json")
+// 	resp, err := rs.client.Do(req)
+// 	if err != nil {
+// 		return "", fmt.Errorf("failed to call Ollama: %w", err)
+// 	}
+// 	defer resp.Body.Close()
+// 	if resp.StatusCode != http.StatusOK {
+// 		return "", fmt.Errorf("Ollama returned status %d", resp.StatusCode)
+// 	}
+// 	var response struct {
+// 		Response string `json:"response"`
+// 	}
+// 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+// 		return "", fmt.Errorf("failed to decode response: %w", err)
+// 	}
+// 	return response.Response, nil
+// }
 
 func min(a, b int) int {
 	if a < b {
