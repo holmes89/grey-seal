@@ -34,7 +34,7 @@ func NewRAGService(vdb greyseal.VectorDB, es greyseal.EmbeddingService) *RAGServ
 }
 
 func (rs *RAGServiceImpl) Query(ctx context.Context, query string, limit int) (*greyseal.RAGResponse, error) {
-	queryVector, err := rs.embeddings.GenerateEmbedding(query)
+	queryVector, err := rs.embeddings.TextToEmbedding(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
@@ -46,8 +46,8 @@ func (rs *RAGServiceImpl) Query(ctx context.Context, query string, limit int) (*
 	for _, result := range results {
 		contextTexts = append(contextTexts, fmt.Sprintf("From %s: %s", filepath.Base(result.FilePath), result.Content))
 	}
-	contextStr := strings.Join(contextTexts, "\n\n")
-	answer, err := rs.generateAnswer(ctx, query, contextStr)
+
+	answer, err := rs.embeddings.GenerateAnswer(query, contextTexts)
 	if err != nil {
 		answer = fmt.Sprintf("Based on the retrieved context, here are the most relevant passages for '%s':\n\n%s", query, strings.Join(contextTexts[:min(2, len(contextTexts))], "\n\n"))
 		log.Printf("LLM generation failed, using fallback: %v", err)

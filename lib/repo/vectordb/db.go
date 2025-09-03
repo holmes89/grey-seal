@@ -19,6 +19,22 @@ type VectorDBImpl struct {
 	conn *sql.Conn
 }
 
+func NewVectorDBReadOnly(dbPath string) (*VectorDBImpl, error) {
+	db, err := sql.Open("duckdb", fmt.Sprintf("%s?access_mode=READ_ONLY", dbPath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open DuckDB: %w", err)
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to DuckDB: %w", err)
+	}
+
+	vdb := &VectorDBImpl{db: db, conn: conn}
+	return vdb, nil
+
+}
+
 func NewVectorDB(dbPath string) (*VectorDBImpl, error) {
 	db, err := sql.Open("duckdb", fmt.Sprintf("%s?access_mode=READ_WRITE", dbPath))
 	if err != nil {

@@ -11,6 +11,8 @@ type DocumentProcessingService interface {
 // EmbeddingService defines the interface for text-to-vector embedding services.
 type EmbeddingService interface {
 	GenerateEmbedding(text string) ([]float32, error)
+	TextToEmbedding(text string) ([]float32, error)
+	GenerateAnswer(query string, contexts []string) (string, error)
 }
 
 // RAGService defines the interface for retrieval-augmented generation services.

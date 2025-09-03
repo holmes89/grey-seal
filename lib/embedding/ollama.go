@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/ollama/ollama/api"
@@ -72,6 +73,30 @@ func (es *OllamaEmbeddingServiceImpl) GenerateEmbedding(text string) ([]float32,
 	}
 }
 
+func (es *OllamaEmbeddingServiceImpl) GenerateAnswer(query string, contexts []string) (string, error) {
+
+	contextStr := strings.Join(contexts, "\n\n")
+	prompt := fmt.Sprintf(`You are a chef. Use the following context to answer the question accurately and concisely.\n\nContext:\n%s\n\nQuestion: %s\n\nAnswer:`, contextStr, query)
+
+	var sb strings.Builder
+	stream := false
+	fmt.Println("generating answer")
+	err := es.client.Generate(context.Background(), &api.GenerateRequest{
+		Prompt: prompt,
+		Model:  "gemma3",
+		Stream: &stream,
+	}, func(resp api.GenerateResponse) error {
+		fmt.Println("thinking....", resp.Thinking)
+		sb.WriteString(resp.Response)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("generated answer")
+	return sb.String(), nil
+}
+
 // generateOllamaEmbedding uses the official Ollama client to generate embeddings
 func (es *OllamaEmbeddingServiceImpl) generateOllamaEmbedding(text string) ([]float32, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -93,6 +118,33 @@ func (es *OllamaEmbeddingServiceImpl) generateOllamaEmbedding(text string) ([]fl
 		return nil, fmt.Errorf("empty embedding received")
 	}
 
+	embedding := make([]float32, len(resp.Embedding))
+	for i, v := range resp.Embedding {
+		embedding[i] = float32(v)
+	}
+
+	return embedding, nil
+}
+
+func (es *OllamaEmbeddingServiceImpl) TextToEmbedding(text string) ([]float32, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	req := &api.EmbeddingRequest{
+		Model:  es.model,
+		Prompt: text,
+	}
+
+	resp, err := es.client.Embeddings(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(resp.Embedding) == 0 {
+		return nil, fmt.Errorf("empty embedding received")
+	}
+
+	// Convert to float32
 	embedding := make([]float32, len(resp.Embedding))
 	for i, v := range resp.Embedding {
 		embedding[i] = float32(v)
