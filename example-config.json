@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "recipe": {
+      "command": "/Users/joel/backup/personal/grey-seal/bin/mcp-server",
+      "args": ["-db=/Users/joel/backup/personal/grey-seal/grey-seal.duckdb"]
+    }
+  }
+}
