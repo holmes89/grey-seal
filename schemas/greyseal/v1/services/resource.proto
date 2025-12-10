@@ -1,0 +1,41 @@
+syntax = "proto3";
+package schemas.greyseal.v1.services.v1;
+
+
+import "schemas/greyseal/v1/resource.proto";
+
+
+service ResourceService {
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse) {}
+  rpc GetResource(GetResourceRequest) returns (GetResourceResponse) {}
+  rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse) {}
+}
+
+message ListResourcesRequest {
+  optional int32 count = 2;
+  optional string cursor = 3;
+}
+
+message ListResourcesResponse {
+  repeated schemas.greyseal.v1.Resource data = 1;
+  string cursor = 2;
+  int32 count = 3;
+}
+
+message GetResourceRequest {
+  string uuid = 1;
+}
+
+message GetResourceResponse {
+  schemas.greyseal.v1.Resource data = 1;
+}
+
+message CreateResourceRequest {
+  schemas.greyseal.v1.Resource data = 1;
+}
+
+message CreateResourceResponse {
+  schemas.greyseal.v1.Resource data = 1;
+}
+
+

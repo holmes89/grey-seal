@@ -1,0 +1,40 @@
+syntax = "proto3";
+package schemas.greyseal.v1.services.v1;
+
+
+import "schemas/greyseal/v1/question.proto";
+
+
+service QuestionService {
+  rpc ListQuestions(ListQuestionsRequest) returns (ListQuestionsResponse) {}
+  rpc GetQuestion(GetQuestionRequest) returns (GetQuestionResponse) {}
+  rpc CreateQuestion(CreateQuestionRequest) returns (CreateQuestionResponse) {}
+}
+
+message ListQuestionsRequest {
+  optional int32 count = 2;
+  optional string cursor = 3;
+}
+
+message ListQuestionsResponse {
+  repeated schemas.greyseal.v1.Question data = 1;
+  string cursor = 2;
+  int32 count = 3;
+}
+
+message GetQuestionRequest {
+  string uuid = 1;
+}
+
+message GetQuestionResponse {
+  schemas.greyseal.v1.Question data = 1;
+}
+
+message CreateQuestionRequest {
+  schemas.greyseal.v1.Question data = 1;
+}
+
+message CreateQuestionResponse {
+  schemas.greyseal.v1.Answer data = 1;
+}
+
