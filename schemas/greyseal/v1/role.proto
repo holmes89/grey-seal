@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package schemas.greyseal.v1;
+
+
+import "google/protobuf/timestamp.proto";
+
+// Role is a reusable named system prompt that can be assigned to a conversation
+// to shape how the chatbot responds. Leaving role_uuid blank on a conversation
+// means no system prompt is applied.
+message Role {
+  string uuid = 1;
+  string name = 2;
+  string system_prompt = 3;
+  google.protobuf.Timestamp created_at = 4;
+}

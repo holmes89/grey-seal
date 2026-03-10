@@ -1,5 +1,6 @@
-package resource
+//go:build ignore
 
+package resource
 import (
 	"context"
 	"log"
@@ -12,7 +13,7 @@ import (
 )
 
 type ResourceConsumer struct {
-	consumer        base.Consumer[*entitiesv1.Resource]
+	consumer    base.Consumer[*entitiesv1.Resource]
 	resourceservice base.Service[*entitiesv1.Resource]
 }
 
@@ -21,7 +22,7 @@ func NewResourceConsumer(
 	resourceservice base.Service[*entitiesv1.Resource],
 ) {
 	con := &ResourceConsumer{
-		consumer:        consumer,
+		consumer:    consumer,
 		resourceservice: resourceservice,
 	}
 	go con.run()
@@ -41,12 +42,15 @@ func (c *ResourceConsumer) run() {
 	for i := range c.consumer.Read() {
 
 		resource := &entitiesv1.Resource{
-			Uuid:      uuid.New().String(),
+			Uuid: uuid.New().String(),
+			Name: i.Name,
+			Service: i.Service,
+			Entity: i.Entity,
+			Source: i.Source,
+			Path: i.Path,
 			CreatedAt: i.CreatedAt,
-			Service:   i.Service,
-			Entity:    i.Entity,
-			Source:    i.Source,
-			Path:      i.Path,
+			IndexedAt: i.IndexedAt,
+			
 		}
 
 		_, err := c.resourceservice.Create(context.Background(), &servicesv1.CreateResourceRequest{
@@ -59,3 +63,4 @@ func (c *ResourceConsumer) run() {
 		log.Printf("resource %s was imported\n", i.Uuid)
 	}
 }
+

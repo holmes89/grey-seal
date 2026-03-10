@@ -8,7 +8,10 @@ import (
 )
 
 type ResourceService interface {
-	List(con context.Context, lis base.ListRequest) (base.ListResponse[*Resource], error)
-	Get(con context.Context, get base.GetRequest[*Resource]) (base.GetResponse[*Resource], error)
-	Create(con context.Context, cre base.CreateRequest[*Resource]) (base.CreateResponse[*Resource], error)
+	List(ctx context.Context, lis base.ListRequest) (base.ListResponse[*Resource], error)
+	Get(ctx context.Context, get base.GetRequest[*Resource]) (base.GetResponse[*Resource], error)
+	Delete(ctx context.Context, id string) error
+
+	// Ingest saves resource metadata and triggers chunking + embedding into the vector store.
+	Ingest(ctx context.Context, r *Resource) (*Resource, error)
 }

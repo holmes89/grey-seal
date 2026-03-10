@@ -1,63 +1,43 @@
 version: "3.7"
 name: greyseal
-volumes:
-  redpanda-0: null
 services:
   api:
-    image: holmes89/greyseal:latest
+    image: ghcr.io/holmes89/greyseal:latest
     restart: always
     build:
       context: ./
       ssh:
         - default
     environment:
-      DATABASE_URL: "postgres:password@db/greyseal?sslmode=disable"
-      KAFKA_BROKERS: "redpanda-0:9092"  # Use internal port for Docker network
-    volumes:
-      - ./data:/data
+      DATABASE_URL: "postgres://postgres:password@db/greyseal?sslmode=disable"
+      QDRANT_HOST: "qdrant:6334"
+      QDRANT_COLLECTION: "greyseal"
+      OLLAMA_HOST: "http://ollama:11434"
+      OLLAMA_EMBED_MODEL: "all-minilm"
+      OLLAMA_CHAT_MODEL: "deepseek-r1"
     ports:
       - 9000:9000
     networks:
       - web
     depends_on:
-      - db
-      - redpanda-0
-    # Add healthcheck to ensure proper startup order
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 40s
-  worker:
-    image: holmes89/greyseal-worker:latest
-    restart: always
-    build:
-      context: ./
-      dockerfile: Dockerfile.worker
-      ssh:
-        - default
-    environment:
-      DATABASE_URL: "postgres:password@db/greyseal?sslmode=disable"
-      KAFKA_BROKERS: "redpanda-0:9092"  # Use internal port for Docker network
-    volumes:
-      - ./data:/data
-    networks:
-      - web
-    depends_on:
-      - db
-      - redpanda-0
+      db:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_started
+
   db:
-    image: pgvector/pgvector:pg18-trixie
+    image: postgres:17
     restart: always
     environment:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: greyseal
       PGDATA: /var/lib/postgresql/data
     ports:
-      - 5432:5432    
+      - 5432:5432
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data  # Fix volume path
+      - ./data/postgres:/var/lib/postgresql/data
     networks:
       - web
     healthcheck:
@@ -65,78 +45,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  redpanda-0:
-    command:
-      - redpanda
-      - start
-      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
-      - --advertise-kafka-addr internal://redpanda-0:9092,external://localhost:19092
-      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
-      - --advertise-pandaproxy-addr internal://redpanda-0:8082,external://localhost:18082
-      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
-      - --rpc-addr redpanda-0:33145
-      - --advertise-rpc-addr redpanda-0:33145
-      - --mode dev-container
-      - --smp 1
-      - --default-log-level=info
-      # Add auto topic creation settings
-      - --set redpanda.auto_create_topics_enabled=true
-      - --set redpanda.default_topic_partitions=1
-      - --set redpanda.default_topic_replications=1
-    image: docker.redpanda.com/redpandadata/redpanda:v24.1.7
-    container_name: redpanda-0
-    volumes:
-      - redpanda-0:/var/lib/redpanda/data
-    networks:
-      - web
-    ports:
-      - 18081:18081
-      - 18082:18082
-      - 19092:19092
-      - 19644:9644
-    # healthcheck:
-    #   test: ["CMD-SHELL", "rpk cluster health --brokers redpanda-0:9092"]
-    #   interval: 10s
-    #   timeout: 5s
-    #   retries: 5
-    #   start_period: 30s
-  console:
-    container_name: redpanda-console
-    image: docker.redpanda.com/redpandadata/console:v2.6.0
-    networks:
-      - web
-    entrypoint: /bin/sh
+
+  qdrant:
+    image: qdrant/qdrant:latest
     restart: always
-    volumes:
-      - ./schemas:/etc/protos/schemas
-    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
-    environment:
-      CONFIG_FILEPATH: /tmp/config.yml
-      CONSOLE_CONFIG_FILE: |
-        kafka:
-          protobuf:
-            enabled: true
-            mappings:
-              - topicName: greysealv1.Question
-                valueProtoType: schemas.greyseal.v1.Question
-              - topicName: greysealv1.Resource
-                valueProtoType: schemas.greyseal.v1.Resource
-            fileSystem:
-              enabled: true
-              refreshInterval: 5m
-              paths:
-                - /etc/protos
-          brokers: ["redpanda-0:9092"]
-          schemaRegistry:
-            enabled: true
-            urls: ["http://redpanda-0:8081"]
-        redpanda:
-          adminApi:
-            enabled: true
-            urls: ["http://redpanda-0:9644"]
     ports:
-      - 8085:8080
-    depends_on:
-    - redpanda-0
+      - 6333:6333
+      - 6334:6334
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    networks:
+      - web
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: always
+    ports:
+      - 11434:11434
+    volumes:
+      - ./data/ollama:/root/.ollama
+    networks:
+      - web
+
 networks:
   web:

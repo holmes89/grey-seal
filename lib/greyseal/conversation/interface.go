@@ -1,0 +1,71 @@
+package conversation
+
+import (
+	"context"
+
+	"github.com/holmes89/archaea/base"
+	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
+	. "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
+)
+
+type ConversationService interface {
+	List(ctx context.Context, lis base.ListRequest) (base.ListResponse[*Conversation], error)
+	Get(ctx context.Context, get base.GetRequest[*Conversation]) (base.GetResponse[*Conversation], error)
+	Create(ctx context.Context, data *Conversation) (*Conversation, error)
+	Update(ctx context.Context, id string, data *Conversation) (*Conversation, error)
+	Delete(ctx context.Context, id string) error
+
+	// Chat sends a user message and streams back the assistant response token by token.
+	// The stream callback is invoked once per token; returning an error aborts streaming.
+	// The fully-populated assistant Message is returned when streaming completes.
+	Chat(ctx context.Context, conversationUUID string, content string, stream func(token string) error) (*Message, error)
+
+	// SubmitFeedback records user feedback (-1/0/1) on an assistant message.
+	SubmitFeedback(ctx context.Context, messageUUID string, feedback int32) error
+}
+
+type MessageRepository interface {
+	Create(context.Context, *Message) error
+	Update(context.Context, string, *Message) error
+	Delete(context.Context, string) error
+	Get(context.Context, string) (*Message, error)
+	List(context.Context, string, uint, map[string][]any) ([]*Message, error)
+	ListByConversation(ctx context.Context, conversationUUID string) ([]*Message, error)
+	UpdateFeedback(ctx context.Context, messageUUID string, feedback int32) error
+}
+
+var _ base.Entity = (*Message)(nil)
+var _ base.Repository[*Message] = (MessageRepository)(nil)
+
+type ConversationRepository interface {
+	Create(context.Context, *Conversation) error
+	Update(context.Context, string, *Conversation) error
+	Delete(context.Context, string) error
+	Get(context.Context, string) (*Conversation, error)
+	List(context.Context, string, uint, map[string][]any) ([]*Conversation, error)
+}
+
+var _ base.Entity = (*Conversation)(nil)
+var _ base.Repository[*Conversation] = (ConversationRepository)(nil)
+
+// QueryResult holds a single vector search result.
+type QueryResult struct {
+	ResourceUUID string
+	Content      string
+	Score        float32
+}
+
+// VectorQuerier retrieves relevant chunks from the vector store.
+type VectorQuerier interface {
+	Query(ctx context.Context, queryVector []float32, limit uint64, resourceUUIDs []string) ([]QueryResult, error)
+}
+
+// Embedder generates embeddings for a list of text documents.
+type Embedder interface {
+	EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error)
+}
+
+// RoleRepository fetches role data by UUID.
+type RoleRepository interface {
+	Get(ctx context.Context, id string) (*greysealv1.Role, error)
+}

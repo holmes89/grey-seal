@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package schemas.greyseal.v1.services;
+
+
+import "schemas/greyseal/v1/role.proto";
+
+service RoleService {
+  rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse) {}
+  rpc GetRole(GetRoleRequest) returns (GetRoleResponse) {}
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse) {}
+  rpc UpdateRole(UpdateRoleRequest) returns (UpdateRoleResponse) {}
+  rpc DeleteRole(DeleteRoleRequest) returns (DeleteRoleResponse) {}
+}
+
+message CreateRoleRequest {
+  schemas.greyseal.v1.Role data = 1;
+}
+
+message CreateRoleResponse {
+  schemas.greyseal.v1.Role data = 1;
+}
+
+message GetRoleRequest {
+  string uuid = 1;
+}
+
+message GetRoleResponse {
+  schemas.greyseal.v1.Role data = 1;
+}
+
+message ListRolesRequest {
+  optional int32 count = 1;
+  optional string cursor = 2;
+}
+
+message ListRolesResponse {
+  repeated schemas.greyseal.v1.Role data = 1;
+  string cursor = 2;
+  int32 count = 3;
+}
+
+message UpdateRoleRequest {
+  string uuid = 1;
+  schemas.greyseal.v1.Role data = 2;
+}
+
+message UpdateRoleResponse {
+  schemas.greyseal.v1.Role data = 1;
+}
+
+message DeleteRoleRequest {
+  string uuid = 1;
+}
+
+message DeleteRoleResponse {}

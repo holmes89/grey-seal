@@ -19,28 +19,28 @@ var _ base.Repository[*Resource] = (*ResourceRepo)(nil)
 
 func (r *ResourceRepo) Create(ctx context.Context, b *Resource) error {
 	_, err := sq.StatementBuilder.PlaceholderFormat(sq.Dollar).Insert("resources").
-		Columns("uuid", "created_at", "service", "entity", "source", "path").
+		Columns("uuid", "name", "service", "entity", "source", "path", "created_at", "indexed_at").
 		Values(
 			b.Uuid,
-			b.CreatedAt.AsTime(),
+			b.Name,
 			b.Service,
 			b.Entity,
-			b.Source.String(),
-			b.Path).
+			int32(b.Source),
+			b.Path,
+			b.CreatedAt.AsTime(),
+			b.IndexedAt.AsTime()).
 		RunWith(r.conn).Exec()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (r *ResourceRepo) Update(ctx context.Context, id string, b *Resource) error {
 	query, args, err := sq.Update("resources").
+		Set("name", b.Name).
 		Set("service", b.Service).
 		Set("entity", b.Entity).
-		Set("source", b.Source.String()).
+		Set("source", int32(b.Source)).
 		Set("path", b.Path).
+		Set("indexed_at", b.IndexedAt.AsTime()).
 		Where(sq.Eq{"uuid": id}).
 		ToSql()
 	if err != nil {
@@ -63,26 +63,33 @@ func (r *ResourceRepo) Delete(ctx context.Context, id string) error {
 
 func (r *ResourceRepo) Get(ctx context.Context, id string) (*Resource, error) {
 	resource := &Resource{}
-	var created_atDt time.Time
+	var sourceVal int32
+	var createdAtDt time.Time
+	var indexedAtDt time.Time
 	err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
-		Select("uuid", "created_at", "service", "entity", "path").
+		Select("uuid", "name", "service", "entity", "source", "path", "created_at", "indexed_at").
 		From("resources").
 		Where(sq.Eq{"uuid": id}).
 		RunWith(r.conn).
 		QueryRow().
 		Scan(
 			&resource.Uuid,
-			&created_atDt,
+			&resource.Name,
 			&resource.Service,
 			&resource.Entity,
+			&sourceVal,
 			&resource.Path,
+			&createdAtDt,
+			&indexedAtDt,
 		)
 	if err != nil {
 		fmt.Println("error getting resource", err)
 		return nil, err
 	}
-	resource.CreatedAt = timestamppb.New(created_atDt)
+	resource.Source = Source(sourceVal)
+	resource.CreatedAt = timestamppb.New(createdAtDt)
+	resource.IndexedAt = timestamppb.New(indexedAtDt)
 	return resource, nil
 }
 
@@ -91,7 +98,7 @@ func (r *ResourceRepo) List(ctx context.Context, cursor string, limit uint, filt
 
 	rows, err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
-		Select("uuid", "created_at", "service", "entity", "path").
+		Select("uuid", "name", "service", "entity", "source", "path", "created_at", "indexed_at").
 		From("resources").
 		RunWith(r.conn).
 		Query()
@@ -102,19 +109,26 @@ func (r *ResourceRepo) List(ctx context.Context, cursor string, limit uint, filt
 	defer rows.Close()
 	for rows.Next() {
 		resource := &Resource{}
-		var created_atDt time.Time
+		var sourceVal int32
+		var createdAtDt time.Time
+		var indexedAtDt time.Time
 		err := rows.Scan(
 			&resource.Uuid,
-			&created_atDt,
+			&resource.Name,
 			&resource.Service,
 			&resource.Entity,
+			&sourceVal,
 			&resource.Path,
+			&createdAtDt,
+			&indexedAtDt,
 		)
 		if err != nil {
-			fmt.Println("error getting resource", err)
+			fmt.Println("error scanning resource", err)
 			return nil, err
 		}
-		resource.CreatedAt = timestamppb.New(created_atDt)
+		resource.Source = Source(sourceVal)
+		resource.CreatedAt = timestamppb.New(createdAtDt)
+		resource.IndexedAt = timestamppb.New(indexedAtDt)
 		resources = append(resources, resource)
 	}
 	return resources, nil

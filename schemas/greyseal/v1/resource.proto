@@ -2,19 +2,24 @@ syntax = "proto3";
 
 package schemas.greyseal.v1;
 
+
 import "google/protobuf/timestamp.proto";
 
 enum Source {
   SOURCE_UNSPECIFIED = 0;
   SOURCE_WEBSITE = 1;
   SOURCE_PDF = 2;
+  SOURCE_TEXT = 3;
 }
 
+// Resource represents an ingested and indexed document used as conversation context.
 message Resource {
   string uuid = 1;
-  google.protobuf.Timestamp created_at = 2;
+  string name = 2;
   string service = 3;
   string entity = 4;
   Source source = 5;
   string path = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp indexed_at = 8;
 }

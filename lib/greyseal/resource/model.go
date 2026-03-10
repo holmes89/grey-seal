@@ -17,3 +17,4 @@ type ResourceRepository interface {
 
 var _ base.Entity = (*Resource)(nil)
 var _ base.Repository[*Resource] = (ResourceRepository)(nil)
+

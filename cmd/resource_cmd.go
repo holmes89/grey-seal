@@ -1,3 +1,5 @@
+//go:build ignore
+
 package cmd
 
 import (
@@ -10,14 +12,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// listresourcesCmd represents the listresources command
+// listResourcesCmd represents the listResources command
 var listResourcesCmd = &cobra.Command{
 	Use:   "resource",
 	Short: "list a resource",
-	RunE:  app.Listresources,
+	RunE:  app.ListResources,
 }
 
-func (app *App) Listresources(cmd *cobra.Command, args []string) error {
+func (app *App) ListResources(cmd *cobra.Command, args []string) error {
 	client := services.NewResourceServiceClient(app.conn)
 	defer app.Close()
 	count := int32(10)
@@ -26,11 +28,16 @@ func (app *App) Listresources(cmd *cobra.Command, args []string) error {
 	}
 
 	res, err := client.ListResources(context.Background(), req)
-	fmt.Println(res) // todo table print
-	return err
+	if err != nil {
+		return err
+	}
+	for _, item := range res.Data {
+		fmt.Println(item.String())
+	}
+	return nil
 }
 
-// getresourceCmd represents the getresource command
+// getResourceCmd represents the getResource command
 var getResourceCmd = &cobra.Command{
 	Use:   "resource",
 	Short: "get a resource",
@@ -47,18 +54,21 @@ func (app *App) GetResource(cmd *cobra.Command, args []string) error {
 	}
 
 	res, err := client.GetResource(context.Background(), req)
-	fmt.Println(res) // todo table print
-	return err
+	if err != nil {
+		return err
+	}
+	fmt.Println(res.Data.String())
+	return nil
 }
 
-// createresourceCmd represents the createResource command
+// createResourceCmd represents the createResource command
 var createResourceCmd = &cobra.Command{
 	Use:   "resource",
 	Short: "create a resource",
-	RunE:  app.Createresource,
+	RunE:  app.CreateResource,
 }
 
-func (app *App) Createresource(cmd *cobra.Command, args []string) error {
+func (app *App) CreateResource(cmd *cobra.Command, args []string) error {
 	client := services.NewResourceServiceClient(app.conn)
 
 	defer app.Close()
@@ -68,15 +78,72 @@ func (app *App) Createresource(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	resource.Source = greysealv1.Source_SOURCE_WEBSITE
-
 	req := &services.CreateResourceRequest{
 		Data: &resource,
 	}
 
 	res, err := client.CreateResource(context.Background(), req)
-	fmt.Println(res) // todo table print
-	return err
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Created Resource: %s\n", res.Data.Uuid)
+	fmt.Println(res.Data.String())
+	return nil
+}
+
+// updateResourceCmd represents the updateResource command
+var updateResourceCmd = &cobra.Command{
+	Use:   "resource",
+	Short: "update a resource",
+	RunE:  app.UpdateResource,
+	Args:  cobra.ExactArgs(1),
+}
+
+func (app *App) UpdateResource(cmd *cobra.Command, args []string) error {
+	client := services.NewResourceServiceClient(app.conn)
+	defer app.Close()
+
+	f := form.Form[greysealv1.Resource]{}
+	resource, err := f.Parse()
+	if err != nil {
+		return err
+	}
+	req := &services.UpdateResourceRequest{
+		Uuid: args[0],
+		Data: &resource,
+	}
+
+	res, err := client.UpdateResource(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Updated Resource: %s\n", args[0])
+	fmt.Println(res.Data.String())
+	return nil
+}
+
+// deleteResourceCmd represents the deleteResource command
+var deleteResourceCmd = &cobra.Command{
+	Use:   "resource",
+	Short: "delete a resource",
+	RunE:  app.DeleteResource,
+	Args:  cobra.ExactArgs(1),
+}
+
+func (app *App) DeleteResource(cmd *cobra.Command, args []string) error {
+	client := services.NewResourceServiceClient(app.conn)
+	defer app.Close()
+
+	req := &services.DeleteResourceRequest{
+		Uuid: args[0],
+	}
+
+	_, err := client.DeleteResource(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Deleted Resource: %s\n", args[0])
+	return nil
 }
 
 func init() {
@@ -86,5 +153,9 @@ func init() {
 	getCmd.AddCommand(getResourceCmd)
 
 	createCmd.AddCommand(createResourceCmd)
+
+	updateCmd.AddCommand(updateResourceCmd)
+
+	deleteCmd.AddCommand(deleteResourceCmd)
 
 }

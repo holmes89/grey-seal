@@ -1,0 +1,223 @@
+package conversation
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/holmes89/archaea/base"
+	. "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+var _ ConversationService = (*conversationService)(nil)
+
+// LLM streams an assistant response given a list of chat messages.
+// Each token is passed to the stream callback; the full response is returned.
+type LLM interface {
+	Chat(ctx context.Context, messages []LLMMessage, stream func(token string) error) (string, error)
+}
+
+// LLMMessage is a single message in the LLM chat format.
+type LLMMessage struct {
+	Role    string // "system", "user", "assistant"
+	Content string
+}
+
+type conversationService struct {
+	conversationRepo base.Repository[*Conversation]
+	messageRepo      MessageRepository
+	vectorQuerier    VectorQuerier // optional
+	embedder         Embedder     // optional
+	roleRepo         RoleRepository // optional
+	llm              LLM          // optional
+}
+
+func NewConversationService(
+	conversationRepo base.Repository[*Conversation],
+	messageRepo MessageRepository,
+	vectorQuerier VectorQuerier,
+	embedder Embedder,
+	roleRepo RoleRepository,
+	llm LLM,
+) ConversationService {
+	return &conversationService{
+		conversationRepo: conversationRepo,
+		messageRepo:      messageRepo,
+		vectorQuerier:    vectorQuerier,
+		embedder:         embedder,
+		roleRepo:         roleRepo,
+		llm:              llm,
+	}
+}
+
+func (srv *conversationService) List(ctx context.Context, lis base.ListRequest) (base.ListResponse[*Conversation], error) {
+	data, err := srv.conversationRepo.List(ctx, lis.GetCursor(), uint(lis.GetCount()), nil)
+	return &base.ListGenericResponse[*Conversation]{
+		Cursor: "",
+		Count:  int32(len(data)),
+		Data:   data,
+	}, err
+}
+
+func (srv *conversationService) Get(ctx context.Context, get base.GetRequest[*Conversation]) (base.GetResponse[*Conversation], error) {
+	data, err := srv.conversationRepo.Get(ctx, get.GetUuid())
+	return &base.GetGenericResponse[*Conversation]{Data: data}, err
+}
+
+func (srv *conversationService) Create(ctx context.Context, data *Conversation) (*Conversation, error) {
+	if data.Uuid == "" {
+		data.Uuid = uuid.New().String()
+	}
+	now := timestamppb.New(time.Now())
+	data.CreatedAt = now
+	data.UpdatedAt = now
+
+	err := srv.conversationRepo.Create(ctx, data)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (srv *conversationService) Update(ctx context.Context, id string, data *Conversation) (*Conversation, error) {
+	data.UpdatedAt = timestamppb.New(time.Now())
+	err := srv.conversationRepo.Update(ctx, id, data)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (srv *conversationService) Delete(ctx context.Context, id string) error {
+	return srv.conversationRepo.Delete(ctx, id)
+}
+
+func (srv *conversationService) Chat(ctx context.Context, conversationUUID string, content string, stream func(token string) error) (*Message, error) {
+	// 1. Save user message to DB
+	userMsg := &Message{
+		Uuid:             uuid.New().String(),
+		ConversationUuid: conversationUUID,
+		Role:             MessageRole_MESSAGE_ROLE_USER,
+		Content:          content,
+		CreatedAt:        timestamppb.New(time.Now()),
+	}
+	if err := srv.messageRepo.Create(ctx, userMsg); err != nil {
+		return nil, fmt.Errorf("failed to save user message: %w", err)
+	}
+
+	// 2. Load conversation to get role_uuid and resource_uuids scope
+	conv, err := srv.conversationRepo.Get(ctx, conversationUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load conversation: %w", err)
+	}
+
+	// Build LLM messages list
+	var llmMessages []LLMMessage
+
+	// 3. Load role system prompt if role_uuid is set
+	if conv.RoleUuid != "" && srv.roleRepo != nil {
+		role, err := srv.roleRepo.Get(ctx, conv.RoleUuid)
+		if err == nil && role.SystemPrompt != "" {
+			llmMessages = append(llmMessages, LLMMessage{
+				Role:    "system",
+				Content: role.SystemPrompt,
+			})
+		}
+	}
+
+	// 4. Load recent message history (last 10 messages)
+	history, err := srv.messageRepo.ListByConversation(ctx, conversationUUID)
+	if err != nil {
+		history = nil // non-fatal; continue without history
+	}
+	// Take last 10 messages (excluding the one we just saved)
+	if len(history) > 11 {
+		history = history[len(history)-11:]
+	}
+	// Drop the last element (user message we just persisted)
+	if len(history) > 0 && history[len(history)-1].Uuid == userMsg.Uuid {
+		history = history[:len(history)-1]
+	}
+	if len(history) > 10 {
+		history = history[len(history)-10:]
+	}
+
+	// 5. Generate embedding for the user's content and query Qdrant
+	if srv.embedder != nil && srv.vectorQuerier != nil {
+		embeddings, err := srv.embedder.EmbedDocuments(ctx, []string{content})
+		if err == nil && len(embeddings) > 0 {
+			results, err := srv.vectorQuerier.Query(ctx, embeddings[0], 5, conv.ResourceUuids)
+			if err == nil && len(results) > 0 {
+				// 7. Build context message
+				var contextParts []string
+				for i, r := range results {
+					contextParts = append(contextParts, fmt.Sprintf("%d. %s", i+1, r.Content))
+				}
+				llmMessages = append(llmMessages, LLMMessage{
+					Role:    "system",
+					Content: "Here is relevant context:\n" + strings.Join(contextParts, "\n"),
+				})
+			}
+		}
+	}
+
+	// 8. Add message history
+	for _, msg := range history {
+		role := "user"
+		if msg.Role == MessageRole_MESSAGE_ROLE_ASSISTANT {
+			role = "assistant"
+		}
+		llmMessages = append(llmMessages, LLMMessage{
+			Role:    role,
+			Content: msg.Content,
+		})
+	}
+
+	// Add current user message last
+	llmMessages = append(llmMessages, LLMMessage{
+		Role:    "user",
+		Content: content,
+	})
+
+	// 9. Call LLM (with streaming) or fall back to placeholder
+	var responseContent string
+	if srv.llm != nil {
+		responseContent, err = srv.llm.Chat(ctx, llmMessages, stream)
+		if err != nil {
+			return nil, fmt.Errorf("LLM chat failed: %w", err)
+		}
+	} else {
+		responseContent = "[LLM response not yet implemented]"
+		if err := stream(responseContent); err != nil {
+			return nil, err
+		}
+	}
+
+	// 10. Save assistant message to DB
+	assistantMsg := &Message{
+		Uuid:             uuid.New().String(),
+		ConversationUuid: conversationUUID,
+		Role:             MessageRole_MESSAGE_ROLE_ASSISTANT,
+		Content:          responseContent,
+		CreatedAt:        timestamppb.New(time.Now()),
+	}
+
+	if err := srv.messageRepo.Create(ctx, assistantMsg); err != nil {
+		return nil, fmt.Errorf("failed to save assistant message: %w", err)
+	}
+
+	// Update conversation updated_at
+	_ = srv.conversationRepo.Update(ctx, conversationUUID, &Conversation{
+		Uuid:      conversationUUID,
+		UpdatedAt: timestamppb.New(time.Now()),
+	})
+
+	return assistantMsg, nil
+}
+
+func (srv *conversationService) SubmitFeedback(ctx context.Context, messageUUID string, feedback int32) error {
+	return srv.messageRepo.UpdateFeedback(ctx, messageUUID, feedback)
+}

@@ -1,25 +1,24 @@
 syntax = "proto3";
-package schemas.greyseal.v1.services.v1;
+
+package schemas.greyseal.v1.services;
 
 
 import "schemas/greyseal/v1/resource.proto";
 
-
 service ResourceService {
-  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse) {}
+  // IngestResource ingests a magpie resource, chunks it, and stores embeddings.
+  rpc IngestResource(IngestResourceRequest) returns (IngestResourceResponse) {}
   rpc GetResource(GetResourceRequest) returns (GetResourceResponse) {}
-  rpc CreateResource(CreateResourceRequest) returns (CreateResourceResponse) {}
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse) {}
+  rpc DeleteResource(DeleteResourceRequest) returns (DeleteResourceResponse) {}
 }
 
-message ListResourcesRequest {
-  optional int32 count = 2;
-  optional string cursor = 3;
+message IngestResourceRequest {
+  schemas.greyseal.v1.Resource data = 1;
 }
 
-message ListResourcesResponse {
-  repeated schemas.greyseal.v1.Resource data = 1;
-  string cursor = 2;
-  int32 count = 3;
+message IngestResourceResponse {
+  schemas.greyseal.v1.Resource data = 1;
 }
 
 message GetResourceRequest {
@@ -30,12 +29,19 @@ message GetResourceResponse {
   schemas.greyseal.v1.Resource data = 1;
 }
 
-message CreateResourceRequest {
-  schemas.greyseal.v1.Resource data = 1;
+message ListResourcesRequest {
+  optional int32 count = 1;
+  optional string cursor = 2;
 }
 
-message CreateResourceResponse {
-  schemas.greyseal.v1.Resource data = 1;
+message ListResourcesResponse {
+  repeated schemas.greyseal.v1.Resource data = 1;
+  string cursor = 2;
+  int32 count = 3;
 }
 
+message DeleteResourceRequest {
+  string uuid = 1;
+}
 
+message DeleteResourceResponse {}

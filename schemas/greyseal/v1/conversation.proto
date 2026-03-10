@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package schemas.greyseal.v1;
+
+
+import "google/protobuf/timestamp.proto";
+
+enum MessageRole {
+  MESSAGE_ROLE_UNSPECIFIED = 0;
+  MESSAGE_ROLE_USER = 1;
+  MESSAGE_ROLE_ASSISTANT = 2;
+}
+
+// Message is a single turn in a conversation.
+message Message {
+  string uuid = 1;
+  string conversation_uuid = 2;
+  MessageRole role = 3;
+  string content = 4;
+  // resource_uuids holds references to indexed resources used to generate
+  // this response (populated for ASSISTANT messages).
+  repeated string resource_uuids = 5;
+  // feedback allows simple quality tracking: -1 negative, 0 neutral, 1 positive.
+  int32 feedback = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// Conversation is a chat session that persists and can be resumed.
+message Conversation {
+  string uuid = 1;
+  // title is an optional display name; can be set manually or auto-generated
+  // from the first exchange.
+  string title = 2;
+  // role_uuid optionally links to a Role that sets the system prompt.
+  string role_uuid = 3;
+  // resource_uuids optionally scopes retrieval to a specific set of resources.
+  // When empty, all indexed resources are searched.
+  repeated string resource_uuids = 4;
+  // summary holds a rolling compressed summary of older messages to manage
+  // context window length.
+  string summary = 5;
+  repeated Message messages = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
