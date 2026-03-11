@@ -20,6 +20,10 @@ type MessageRepo struct {
 var _ base.Repository[*Message] = (*MessageRepo)(nil)
 
 func (r *MessageRepo) Create(ctx context.Context, b *Message) error {
+	resourceUUIDs := b.ResourceUuids
+	if resourceUUIDs == nil {
+		resourceUUIDs = []string{}
+	}
 	_, err := sq.StatementBuilder.PlaceholderFormat(sq.Dollar).Insert("messages").
 		Columns("uuid", "conversation_uuid", "role", "content", "resource_uuids", "feedback", "created_at").
 		Values(
@@ -27,7 +31,7 @@ func (r *MessageRepo) Create(ctx context.Context, b *Message) error {
 			b.ConversationUuid,
 			int32(b.Role),
 			b.Content,
-			pq.Array(b.ResourceUuids),
+			pq.Array(resourceUUIDs),
 			b.Feedback,
 			b.CreatedAt.AsTime()).
 		RunWith(r.conn).Exec()
@@ -35,10 +39,14 @@ func (r *MessageRepo) Create(ctx context.Context, b *Message) error {
 }
 
 func (r *MessageRepo) Update(ctx context.Context, id string, b *Message) error {
+	resourceUUIDs := b.ResourceUuids
+	if resourceUUIDs == nil {
+		resourceUUIDs = []string{}
+	}
 	query, args, err := sq.Update("messages").
 		Set("role", int32(b.Role)).
 		Set("content", b.Content).
-		Set("resource_uuids", pq.Array(b.ResourceUuids)).
+		Set("resource_uuids", pq.Array(resourceUUIDs)).
 		Set("feedback", b.Feedback).
 		Where(sq.Eq{"uuid": id}).
 		ToSql()
@@ -168,13 +176,17 @@ func NewConversationRepo(conn *Conn) *ConversationRepo {
 var _ base.Repository[*Conversation] = (*ConversationRepo)(nil)
 
 func (r *ConversationRepo) Create(ctx context.Context, b *Conversation) error {
+	resourceUUIDs := b.ResourceUuids
+	if resourceUUIDs == nil {
+		resourceUUIDs = []string{}
+	}
 	_, err := sq.StatementBuilder.PlaceholderFormat(sq.Dollar).Insert("conversations").
 		Columns("uuid", "title", "role_uuid", "resource_uuids", "summary", "created_at", "updated_at").
 		Values(
 			b.Uuid,
 			b.Title,
 			b.RoleUuid,
-			pq.Array(b.ResourceUuids),
+			pq.Array(resourceUUIDs),
 			b.Summary,
 			b.CreatedAt.AsTime(),
 			b.UpdatedAt.AsTime()).
@@ -183,10 +195,14 @@ func (r *ConversationRepo) Create(ctx context.Context, b *Conversation) error {
 }
 
 func (r *ConversationRepo) Update(ctx context.Context, id string, b *Conversation) error {
+	resourceUUIDs := b.ResourceUuids
+	if resourceUUIDs == nil {
+		resourceUUIDs = []string{}
+	}
 	query, args, err := sq.Update("conversations").
 		Set("title", b.Title).
 		Set("role_uuid", b.RoleUuid).
-		Set("resource_uuids", pq.Array(b.ResourceUuids)).
+		Set("resource_uuids", pq.Array(resourceUUIDs)).
 		Set("summary", b.Summary).
 		Set("updated_at", b.UpdatedAt.AsTime()).
 		Where(sq.Eq{"uuid": id}).
