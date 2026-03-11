@@ -131,4 +131,4 @@ networks:
 
 secrets:
   gh_pat:
-    file: ~/.gh_pat
+    file: /home/joel/.gh_pat
