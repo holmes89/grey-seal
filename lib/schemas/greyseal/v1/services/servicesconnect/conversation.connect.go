@@ -22,7 +22,7 @@ const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// ConversationServiceName is the fully-qualified name of the ConversationService service.
-	ConversationServiceName = "schemas.greyseal.v1.services.ConversationService"
+	ConversationServiceName = "schemas.greyseal.services.v1.ConversationService"
 )
 
 // These constants are the fully-qualified names of the RPCs defined in this package. They're
@@ -35,28 +35,28 @@ const (
 const (
 	// ConversationServiceCreateConversationProcedure is the fully-qualified name of the
 	// ConversationService's CreateConversation RPC.
-	ConversationServiceCreateConversationProcedure = "/schemas.greyseal.v1.services.ConversationService/CreateConversation"
+	ConversationServiceCreateConversationProcedure = "/schemas.greyseal.services.v1.ConversationService/CreateConversation"
 	// ConversationServiceGetConversationProcedure is the fully-qualified name of the
 	// ConversationService's GetConversation RPC.
-	ConversationServiceGetConversationProcedure = "/schemas.greyseal.v1.services.ConversationService/GetConversation"
+	ConversationServiceGetConversationProcedure = "/schemas.greyseal.services.v1.ConversationService/GetConversation"
 	// ConversationServiceListConversationsProcedure is the fully-qualified name of the
 	// ConversationService's ListConversations RPC.
-	ConversationServiceListConversationsProcedure = "/schemas.greyseal.v1.services.ConversationService/ListConversations"
+	ConversationServiceListConversationsProcedure = "/schemas.greyseal.services.v1.ConversationService/ListConversations"
 	// ConversationServiceUpdateConversationProcedure is the fully-qualified name of the
 	// ConversationService's UpdateConversation RPC.
-	ConversationServiceUpdateConversationProcedure = "/schemas.greyseal.v1.services.ConversationService/UpdateConversation"
+	ConversationServiceUpdateConversationProcedure = "/schemas.greyseal.services.v1.ConversationService/UpdateConversation"
 	// ConversationServiceDeleteConversationProcedure is the fully-qualified name of the
 	// ConversationService's DeleteConversation RPC.
-	ConversationServiceDeleteConversationProcedure = "/schemas.greyseal.v1.services.ConversationService/DeleteConversation"
+	ConversationServiceDeleteConversationProcedure = "/schemas.greyseal.services.v1.ConversationService/DeleteConversation"
 	// ConversationServiceChatProcedure is the fully-qualified name of the ConversationService's Chat
 	// RPC.
-	ConversationServiceChatProcedure = "/schemas.greyseal.v1.services.ConversationService/Chat"
+	ConversationServiceChatProcedure = "/schemas.greyseal.services.v1.ConversationService/Chat"
 	// ConversationServiceSubmitFeedbackProcedure is the fully-qualified name of the
 	// ConversationService's SubmitFeedback RPC.
-	ConversationServiceSubmitFeedbackProcedure = "/schemas.greyseal.v1.services.ConversationService/SubmitFeedback"
+	ConversationServiceSubmitFeedbackProcedure = "/schemas.greyseal.services.v1.ConversationService/SubmitFeedback"
 )
 
-// ConversationServiceClient is a client for the schemas.greyseal.v1.services.ConversationService
+// ConversationServiceClient is a client for the schemas.greyseal.services.v1.ConversationService
 // service.
 type ConversationServiceClient interface {
 	CreateConversation(context.Context, *connect.Request[services.CreateConversationRequest]) (*connect.Response[services.CreateConversationResponse], error)
@@ -71,7 +71,7 @@ type ConversationServiceClient interface {
 }
 
 // NewConversationServiceClient constructs a client for the
-// schemas.greyseal.v1.services.ConversationService service. By default, it uses the Connect
+// schemas.greyseal.services.v1.ConversationService service. By default, it uses the Connect
 // protocol with the binary Protobuf Codec, asks for gzipped responses, and sends uncompressed
 // requests. To use the gRPC or gRPC-Web protocols, supply the connect.WithGRPC() or
 // connect.WithGRPCWeb() options.
@@ -138,43 +138,43 @@ type conversationServiceClient struct {
 	submitFeedback     *connect.Client[services.SubmitFeedbackRequest, services.SubmitFeedbackResponse]
 }
 
-// CreateConversation calls schemas.greyseal.v1.services.ConversationService.CreateConversation.
+// CreateConversation calls schemas.greyseal.services.v1.ConversationService.CreateConversation.
 func (c *conversationServiceClient) CreateConversation(ctx context.Context, req *connect.Request[services.CreateConversationRequest]) (*connect.Response[services.CreateConversationResponse], error) {
 	return c.createConversation.CallUnary(ctx, req)
 }
 
-// GetConversation calls schemas.greyseal.v1.services.ConversationService.GetConversation.
+// GetConversation calls schemas.greyseal.services.v1.ConversationService.GetConversation.
 func (c *conversationServiceClient) GetConversation(ctx context.Context, req *connect.Request[services.GetConversationRequest]) (*connect.Response[services.GetConversationResponse], error) {
 	return c.getConversation.CallUnary(ctx, req)
 }
 
-// ListConversations calls schemas.greyseal.v1.services.ConversationService.ListConversations.
+// ListConversations calls schemas.greyseal.services.v1.ConversationService.ListConversations.
 func (c *conversationServiceClient) ListConversations(ctx context.Context, req *connect.Request[services.ListConversationsRequest]) (*connect.Response[services.ListConversationsResponse], error) {
 	return c.listConversations.CallUnary(ctx, req)
 }
 
-// UpdateConversation calls schemas.greyseal.v1.services.ConversationService.UpdateConversation.
+// UpdateConversation calls schemas.greyseal.services.v1.ConversationService.UpdateConversation.
 func (c *conversationServiceClient) UpdateConversation(ctx context.Context, req *connect.Request[services.UpdateConversationRequest]) (*connect.Response[services.UpdateConversationResponse], error) {
 	return c.updateConversation.CallUnary(ctx, req)
 }
 
-// DeleteConversation calls schemas.greyseal.v1.services.ConversationService.DeleteConversation.
+// DeleteConversation calls schemas.greyseal.services.v1.ConversationService.DeleteConversation.
 func (c *conversationServiceClient) DeleteConversation(ctx context.Context, req *connect.Request[services.DeleteConversationRequest]) (*connect.Response[services.DeleteConversationResponse], error) {
 	return c.deleteConversation.CallUnary(ctx, req)
 }
 
-// Chat calls schemas.greyseal.v1.services.ConversationService.Chat.
+// Chat calls schemas.greyseal.services.v1.ConversationService.Chat.
 func (c *conversationServiceClient) Chat(ctx context.Context, req *connect.Request[services.ChatRequest]) (*connect.ServerStreamForClient[services.ChatResponse], error) {
 	return c.chat.CallServerStream(ctx, req)
 }
 
-// SubmitFeedback calls schemas.greyseal.v1.services.ConversationService.SubmitFeedback.
+// SubmitFeedback calls schemas.greyseal.services.v1.ConversationService.SubmitFeedback.
 func (c *conversationServiceClient) SubmitFeedback(ctx context.Context, req *connect.Request[services.SubmitFeedbackRequest]) (*connect.Response[services.SubmitFeedbackResponse], error) {
 	return c.submitFeedback.CallUnary(ctx, req)
 }
 
 // ConversationServiceHandler is an implementation of the
-// schemas.greyseal.v1.services.ConversationService service.
+// schemas.greyseal.services.v1.ConversationService service.
 type ConversationServiceHandler interface {
 	CreateConversation(context.Context, *connect.Request[services.CreateConversationRequest]) (*connect.Response[services.CreateConversationResponse], error)
 	GetConversation(context.Context, *connect.Request[services.GetConversationRequest]) (*connect.Response[services.GetConversationResponse], error)
@@ -236,7 +236,7 @@ func NewConversationServiceHandler(svc ConversationServiceHandler, opts ...conne
 		connect.WithSchema(conversationServiceMethods.ByName("SubmitFeedback")),
 		connect.WithHandlerOptions(opts...),
 	)
-	return "/schemas.greyseal.v1.services.ConversationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return "/schemas.greyseal.services.v1.ConversationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ConversationServiceCreateConversationProcedure:
 			conversationServiceCreateConversationHandler.ServeHTTP(w, r)
@@ -262,29 +262,29 @@ func NewConversationServiceHandler(svc ConversationServiceHandler, opts ...conne
 type UnimplementedConversationServiceHandler struct{}
 
 func (UnimplementedConversationServiceHandler) CreateConversation(context.Context, *connect.Request[services.CreateConversationRequest]) (*connect.Response[services.CreateConversationResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ConversationService.CreateConversation is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ConversationService.CreateConversation is not implemented"))
 }
 
 func (UnimplementedConversationServiceHandler) GetConversation(context.Context, *connect.Request[services.GetConversationRequest]) (*connect.Response[services.GetConversationResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ConversationService.GetConversation is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ConversationService.GetConversation is not implemented"))
 }
 
 func (UnimplementedConversationServiceHandler) ListConversations(context.Context, *connect.Request[services.ListConversationsRequest]) (*connect.Response[services.ListConversationsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ConversationService.ListConversations is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ConversationService.ListConversations is not implemented"))
 }
 
 func (UnimplementedConversationServiceHandler) UpdateConversation(context.Context, *connect.Request[services.UpdateConversationRequest]) (*connect.Response[services.UpdateConversationResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ConversationService.UpdateConversation is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ConversationService.UpdateConversation is not implemented"))
 }
 
 func (UnimplementedConversationServiceHandler) DeleteConversation(context.Context, *connect.Request[services.DeleteConversationRequest]) (*connect.Response[services.DeleteConversationResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ConversationService.DeleteConversation is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ConversationService.DeleteConversation is not implemented"))
 }
 
 func (UnimplementedConversationServiceHandler) Chat(context.Context, *connect.Request[services.ChatRequest], *connect.ServerStream[services.ChatResponse]) error {
-	return connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ConversationService.Chat is not implemented"))
+	return connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ConversationService.Chat is not implemented"))
 }
 
 func (UnimplementedConversationServiceHandler) SubmitFeedback(context.Context, *connect.Request[services.SubmitFeedbackRequest]) (*connect.Response[services.SubmitFeedbackResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ConversationService.SubmitFeedback is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ConversationService.SubmitFeedback is not implemented"))
 }

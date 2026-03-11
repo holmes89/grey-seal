@@ -22,7 +22,7 @@ const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// ResourceServiceName is the fully-qualified name of the ResourceService service.
-	ResourceServiceName = "schemas.greyseal.v1.services.ResourceService"
+	ResourceServiceName = "schemas.greyseal.services.v1.ResourceService"
 )
 
 // These constants are the fully-qualified names of the RPCs defined in this package. They're
@@ -35,19 +35,19 @@ const (
 const (
 	// ResourceServiceIngestResourceProcedure is the fully-qualified name of the ResourceService's
 	// IngestResource RPC.
-	ResourceServiceIngestResourceProcedure = "/schemas.greyseal.v1.services.ResourceService/IngestResource"
+	ResourceServiceIngestResourceProcedure = "/schemas.greyseal.services.v1.ResourceService/IngestResource"
 	// ResourceServiceGetResourceProcedure is the fully-qualified name of the ResourceService's
 	// GetResource RPC.
-	ResourceServiceGetResourceProcedure = "/schemas.greyseal.v1.services.ResourceService/GetResource"
+	ResourceServiceGetResourceProcedure = "/schemas.greyseal.services.v1.ResourceService/GetResource"
 	// ResourceServiceListResourcesProcedure is the fully-qualified name of the ResourceService's
 	// ListResources RPC.
-	ResourceServiceListResourcesProcedure = "/schemas.greyseal.v1.services.ResourceService/ListResources"
+	ResourceServiceListResourcesProcedure = "/schemas.greyseal.services.v1.ResourceService/ListResources"
 	// ResourceServiceDeleteResourceProcedure is the fully-qualified name of the ResourceService's
 	// DeleteResource RPC.
-	ResourceServiceDeleteResourceProcedure = "/schemas.greyseal.v1.services.ResourceService/DeleteResource"
+	ResourceServiceDeleteResourceProcedure = "/schemas.greyseal.services.v1.ResourceService/DeleteResource"
 )
 
-// ResourceServiceClient is a client for the schemas.greyseal.v1.services.ResourceService service.
+// ResourceServiceClient is a client for the schemas.greyseal.services.v1.ResourceService service.
 type ResourceServiceClient interface {
 	// IngestResource ingests a magpie resource, chunks it, and stores embeddings.
 	IngestResource(context.Context, *connect.Request[services.IngestResourceRequest]) (*connect.Response[services.IngestResourceResponse], error)
@@ -56,7 +56,7 @@ type ResourceServiceClient interface {
 	DeleteResource(context.Context, *connect.Request[services.DeleteResourceRequest]) (*connect.Response[services.DeleteResourceResponse], error)
 }
 
-// NewResourceServiceClient constructs a client for the schemas.greyseal.v1.services.ResourceService
+// NewResourceServiceClient constructs a client for the schemas.greyseal.services.v1.ResourceService
 // service. By default, it uses the Connect protocol with the binary Protobuf Codec, asks for
 // gzipped responses, and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply
 // the connect.WithGRPC() or connect.WithGRPCWeb() options.
@@ -102,27 +102,27 @@ type resourceServiceClient struct {
 	deleteResource *connect.Client[services.DeleteResourceRequest, services.DeleteResourceResponse]
 }
 
-// IngestResource calls schemas.greyseal.v1.services.ResourceService.IngestResource.
+// IngestResource calls schemas.greyseal.services.v1.ResourceService.IngestResource.
 func (c *resourceServiceClient) IngestResource(ctx context.Context, req *connect.Request[services.IngestResourceRequest]) (*connect.Response[services.IngestResourceResponse], error) {
 	return c.ingestResource.CallUnary(ctx, req)
 }
 
-// GetResource calls schemas.greyseal.v1.services.ResourceService.GetResource.
+// GetResource calls schemas.greyseal.services.v1.ResourceService.GetResource.
 func (c *resourceServiceClient) GetResource(ctx context.Context, req *connect.Request[services.GetResourceRequest]) (*connect.Response[services.GetResourceResponse], error) {
 	return c.getResource.CallUnary(ctx, req)
 }
 
-// ListResources calls schemas.greyseal.v1.services.ResourceService.ListResources.
+// ListResources calls schemas.greyseal.services.v1.ResourceService.ListResources.
 func (c *resourceServiceClient) ListResources(ctx context.Context, req *connect.Request[services.ListResourcesRequest]) (*connect.Response[services.ListResourcesResponse], error) {
 	return c.listResources.CallUnary(ctx, req)
 }
 
-// DeleteResource calls schemas.greyseal.v1.services.ResourceService.DeleteResource.
+// DeleteResource calls schemas.greyseal.services.v1.ResourceService.DeleteResource.
 func (c *resourceServiceClient) DeleteResource(ctx context.Context, req *connect.Request[services.DeleteResourceRequest]) (*connect.Response[services.DeleteResourceResponse], error) {
 	return c.deleteResource.CallUnary(ctx, req)
 }
 
-// ResourceServiceHandler is an implementation of the schemas.greyseal.v1.services.ResourceService
+// ResourceServiceHandler is an implementation of the schemas.greyseal.services.v1.ResourceService
 // service.
 type ResourceServiceHandler interface {
 	// IngestResource ingests a magpie resource, chunks it, and stores embeddings.
@@ -163,7 +163,7 @@ func NewResourceServiceHandler(svc ResourceServiceHandler, opts ...connect.Handl
 		connect.WithSchema(resourceServiceMethods.ByName("DeleteResource")),
 		connect.WithHandlerOptions(opts...),
 	)
-	return "/schemas.greyseal.v1.services.ResourceService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return "/schemas.greyseal.services.v1.ResourceService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ResourceServiceIngestResourceProcedure:
 			resourceServiceIngestResourceHandler.ServeHTTP(w, r)
@@ -183,17 +183,17 @@ func NewResourceServiceHandler(svc ResourceServiceHandler, opts ...connect.Handl
 type UnimplementedResourceServiceHandler struct{}
 
 func (UnimplementedResourceServiceHandler) IngestResource(context.Context, *connect.Request[services.IngestResourceRequest]) (*connect.Response[services.IngestResourceResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ResourceService.IngestResource is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ResourceService.IngestResource is not implemented"))
 }
 
 func (UnimplementedResourceServiceHandler) GetResource(context.Context, *connect.Request[services.GetResourceRequest]) (*connect.Response[services.GetResourceResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ResourceService.GetResource is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ResourceService.GetResource is not implemented"))
 }
 
 func (UnimplementedResourceServiceHandler) ListResources(context.Context, *connect.Request[services.ListResourcesRequest]) (*connect.Response[services.ListResourcesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ResourceService.ListResources is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ResourceService.ListResources is not implemented"))
 }
 
 func (UnimplementedResourceServiceHandler) DeleteResource(context.Context, *connect.Request[services.DeleteResourceRequest]) (*connect.Response[services.DeleteResourceResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.ResourceService.DeleteResource is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ResourceService.DeleteResource is not implemented"))
 }

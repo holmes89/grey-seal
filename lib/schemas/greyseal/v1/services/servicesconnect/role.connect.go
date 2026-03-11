@@ -22,7 +22,7 @@ const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// RoleServiceName is the fully-qualified name of the RoleService service.
-	RoleServiceName = "schemas.greyseal.v1.services.RoleService"
+	RoleServiceName = "schemas.greyseal.services.v1.RoleService"
 )
 
 // These constants are the fully-qualified names of the RPCs defined in this package. They're
@@ -34,18 +34,18 @@ const (
 // period.
 const (
 	// RoleServiceCreateRoleProcedure is the fully-qualified name of the RoleService's CreateRole RPC.
-	RoleServiceCreateRoleProcedure = "/schemas.greyseal.v1.services.RoleService/CreateRole"
+	RoleServiceCreateRoleProcedure = "/schemas.greyseal.services.v1.RoleService/CreateRole"
 	// RoleServiceGetRoleProcedure is the fully-qualified name of the RoleService's GetRole RPC.
-	RoleServiceGetRoleProcedure = "/schemas.greyseal.v1.services.RoleService/GetRole"
+	RoleServiceGetRoleProcedure = "/schemas.greyseal.services.v1.RoleService/GetRole"
 	// RoleServiceListRolesProcedure is the fully-qualified name of the RoleService's ListRoles RPC.
-	RoleServiceListRolesProcedure = "/schemas.greyseal.v1.services.RoleService/ListRoles"
+	RoleServiceListRolesProcedure = "/schemas.greyseal.services.v1.RoleService/ListRoles"
 	// RoleServiceUpdateRoleProcedure is the fully-qualified name of the RoleService's UpdateRole RPC.
-	RoleServiceUpdateRoleProcedure = "/schemas.greyseal.v1.services.RoleService/UpdateRole"
+	RoleServiceUpdateRoleProcedure = "/schemas.greyseal.services.v1.RoleService/UpdateRole"
 	// RoleServiceDeleteRoleProcedure is the fully-qualified name of the RoleService's DeleteRole RPC.
-	RoleServiceDeleteRoleProcedure = "/schemas.greyseal.v1.services.RoleService/DeleteRole"
+	RoleServiceDeleteRoleProcedure = "/schemas.greyseal.services.v1.RoleService/DeleteRole"
 )
 
-// RoleServiceClient is a client for the schemas.greyseal.v1.services.RoleService service.
+// RoleServiceClient is a client for the schemas.greyseal.services.v1.RoleService service.
 type RoleServiceClient interface {
 	CreateRole(context.Context, *connect.Request[services.CreateRoleRequest]) (*connect.Response[services.CreateRoleResponse], error)
 	GetRole(context.Context, *connect.Request[services.GetRoleRequest]) (*connect.Response[services.GetRoleResponse], error)
@@ -54,7 +54,7 @@ type RoleServiceClient interface {
 	DeleteRole(context.Context, *connect.Request[services.DeleteRoleRequest]) (*connect.Response[services.DeleteRoleResponse], error)
 }
 
-// NewRoleServiceClient constructs a client for the schemas.greyseal.v1.services.RoleService
+// NewRoleServiceClient constructs a client for the schemas.greyseal.services.v1.RoleService
 // service. By default, it uses the Connect protocol with the binary Protobuf Codec, asks for
 // gzipped responses, and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply
 // the connect.WithGRPC() or connect.WithGRPCWeb() options.
@@ -107,32 +107,32 @@ type roleServiceClient struct {
 	deleteRole *connect.Client[services.DeleteRoleRequest, services.DeleteRoleResponse]
 }
 
-// CreateRole calls schemas.greyseal.v1.services.RoleService.CreateRole.
+// CreateRole calls schemas.greyseal.services.v1.RoleService.CreateRole.
 func (c *roleServiceClient) CreateRole(ctx context.Context, req *connect.Request[services.CreateRoleRequest]) (*connect.Response[services.CreateRoleResponse], error) {
 	return c.createRole.CallUnary(ctx, req)
 }
 
-// GetRole calls schemas.greyseal.v1.services.RoleService.GetRole.
+// GetRole calls schemas.greyseal.services.v1.RoleService.GetRole.
 func (c *roleServiceClient) GetRole(ctx context.Context, req *connect.Request[services.GetRoleRequest]) (*connect.Response[services.GetRoleResponse], error) {
 	return c.getRole.CallUnary(ctx, req)
 }
 
-// ListRoles calls schemas.greyseal.v1.services.RoleService.ListRoles.
+// ListRoles calls schemas.greyseal.services.v1.RoleService.ListRoles.
 func (c *roleServiceClient) ListRoles(ctx context.Context, req *connect.Request[services.ListRolesRequest]) (*connect.Response[services.ListRolesResponse], error) {
 	return c.listRoles.CallUnary(ctx, req)
 }
 
-// UpdateRole calls schemas.greyseal.v1.services.RoleService.UpdateRole.
+// UpdateRole calls schemas.greyseal.services.v1.RoleService.UpdateRole.
 func (c *roleServiceClient) UpdateRole(ctx context.Context, req *connect.Request[services.UpdateRoleRequest]) (*connect.Response[services.UpdateRoleResponse], error) {
 	return c.updateRole.CallUnary(ctx, req)
 }
 
-// DeleteRole calls schemas.greyseal.v1.services.RoleService.DeleteRole.
+// DeleteRole calls schemas.greyseal.services.v1.RoleService.DeleteRole.
 func (c *roleServiceClient) DeleteRole(ctx context.Context, req *connect.Request[services.DeleteRoleRequest]) (*connect.Response[services.DeleteRoleResponse], error) {
 	return c.deleteRole.CallUnary(ctx, req)
 }
 
-// RoleServiceHandler is an implementation of the schemas.greyseal.v1.services.RoleService service.
+// RoleServiceHandler is an implementation of the schemas.greyseal.services.v1.RoleService service.
 type RoleServiceHandler interface {
 	CreateRole(context.Context, *connect.Request[services.CreateRoleRequest]) (*connect.Response[services.CreateRoleResponse], error)
 	GetRole(context.Context, *connect.Request[services.GetRoleRequest]) (*connect.Response[services.GetRoleResponse], error)
@@ -178,7 +178,7 @@ func NewRoleServiceHandler(svc RoleServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(roleServiceMethods.ByName("DeleteRole")),
 		connect.WithHandlerOptions(opts...),
 	)
-	return "/schemas.greyseal.v1.services.RoleService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return "/schemas.greyseal.services.v1.RoleService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RoleServiceCreateRoleProcedure:
 			roleServiceCreateRoleHandler.ServeHTTP(w, r)
@@ -200,21 +200,21 @@ func NewRoleServiceHandler(svc RoleServiceHandler, opts ...connect.HandlerOption
 type UnimplementedRoleServiceHandler struct{}
 
 func (UnimplementedRoleServiceHandler) CreateRole(context.Context, *connect.Request[services.CreateRoleRequest]) (*connect.Response[services.CreateRoleResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.RoleService.CreateRole is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.RoleService.CreateRole is not implemented"))
 }
 
 func (UnimplementedRoleServiceHandler) GetRole(context.Context, *connect.Request[services.GetRoleRequest]) (*connect.Response[services.GetRoleResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.RoleService.GetRole is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.RoleService.GetRole is not implemented"))
 }
 
 func (UnimplementedRoleServiceHandler) ListRoles(context.Context, *connect.Request[services.ListRolesRequest]) (*connect.Response[services.ListRolesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.RoleService.ListRoles is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.RoleService.ListRoles is not implemented"))
 }
 
 func (UnimplementedRoleServiceHandler) UpdateRole(context.Context, *connect.Request[services.UpdateRoleRequest]) (*connect.Response[services.UpdateRoleResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.RoleService.UpdateRole is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.RoleService.UpdateRole is not implemented"))
 }
 
 func (UnimplementedRoleServiceHandler) DeleteRole(context.Context, *connect.Request[services.DeleteRoleRequest]) (*connect.Response[services.DeleteRoleResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.v1.services.RoleService.DeleteRole is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.RoleService.DeleteRole is not implemented"))
 }
