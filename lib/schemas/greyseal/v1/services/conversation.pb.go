@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: schemas/greyseal/v1/services/conversation.proto
 
-package services
+package servicesv1
 
 import (
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
@@ -724,7 +724,7 @@ var File_schemas_greyseal_v1_services_conversation_proto protoreflect.FileDescri
 
 const file_schemas_greyseal_v1_services_conversation_proto_rawDesc = "" +
 	"\n" +
-	"/schemas/greyseal/v1/services/conversation.proto\x12\x1cschemas.greyseal.v1.services\x1a&schemas/greyseal/v1/conversation.proto\"u\n" +
+	"/schemas/greyseal/v1/services/conversation.proto\x12\x1cschemas.greyseal.services.v1\x1a&schemas/greyseal/v1/conversation.proto\"u\n" +
 	"\x19CreateConversationRequest\x12\x14\n" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x12\x1b\n" +
 	"\trole_uuid\x18\x02 \x01(\tR\broleUuid\x12%\n" +
@@ -768,14 +768,14 @@ const file_schemas_greyseal_v1_services_conversation_proto_rawDesc = "" +
 	"\bfeedback\x18\x02 \x01(\x05R\bfeedback\"\x18\n" +
 	"\x16SubmitFeedbackResponse2\xa7\a\n" +
 	"\x13ConversationService\x12\x89\x01\n" +
-	"\x12CreateConversation\x127.schemas.greyseal.v1.services.CreateConversationRequest\x1a8.schemas.greyseal.v1.services.CreateConversationResponse\"\x00\x12\x80\x01\n" +
-	"\x0fGetConversation\x124.schemas.greyseal.v1.services.GetConversationRequest\x1a5.schemas.greyseal.v1.services.GetConversationResponse\"\x00\x12\x86\x01\n" +
-	"\x11ListConversations\x126.schemas.greyseal.v1.services.ListConversationsRequest\x1a7.schemas.greyseal.v1.services.ListConversationsResponse\"\x00\x12\x89\x01\n" +
-	"\x12UpdateConversation\x127.schemas.greyseal.v1.services.UpdateConversationRequest\x1a8.schemas.greyseal.v1.services.UpdateConversationResponse\"\x00\x12\x89\x01\n" +
-	"\x12DeleteConversation\x127.schemas.greyseal.v1.services.DeleteConversationRequest\x1a8.schemas.greyseal.v1.services.DeleteConversationResponse\"\x00\x12a\n" +
-	"\x04Chat\x12).schemas.greyseal.v1.services.ChatRequest\x1a*.schemas.greyseal.v1.services.ChatResponse\"\x000\x01\x12}\n" +
-	"\x0eSubmitFeedback\x123.schemas.greyseal.v1.services.SubmitFeedbackRequest\x1a4.schemas.greyseal.v1.services.SubmitFeedbackResponse\"\x00B\x89\x02\n" +
-	" com.schemas.greyseal.v1.servicesB\x11ConversationProtoP\x01Z>github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services\xa2\x02\x04SGVS\xaa\x02\x1cSchemas.Greyseal.V1.Services\xca\x02\x1cSchemas\\Greyseal\\V1\\Services\xe2\x02(Schemas\\Greyseal\\V1\\Services\\GPBMetadata\xea\x02\x1fSchemas::Greyseal::V1::Servicesb\x06proto3"
+	"\x12CreateConversation\x127.schemas.greyseal.services.v1.CreateConversationRequest\x1a8.schemas.greyseal.services.v1.CreateConversationResponse\"\x00\x12\x80\x01\n" +
+	"\x0fGetConversation\x124.schemas.greyseal.services.v1.GetConversationRequest\x1a5.schemas.greyseal.services.v1.GetConversationResponse\"\x00\x12\x86\x01\n" +
+	"\x11ListConversations\x126.schemas.greyseal.services.v1.ListConversationsRequest\x1a7.schemas.greyseal.services.v1.ListConversationsResponse\"\x00\x12\x89\x01\n" +
+	"\x12UpdateConversation\x127.schemas.greyseal.services.v1.UpdateConversationRequest\x1a8.schemas.greyseal.services.v1.UpdateConversationResponse\"\x00\x12\x89\x01\n" +
+	"\x12DeleteConversation\x127.schemas.greyseal.services.v1.DeleteConversationRequest\x1a8.schemas.greyseal.services.v1.DeleteConversationResponse\"\x00\x12a\n" +
+	"\x04Chat\x12).schemas.greyseal.services.v1.ChatRequest\x1a*.schemas.greyseal.services.v1.ChatResponse\"\x000\x01\x12}\n" +
+	"\x0eSubmitFeedback\x123.schemas.greyseal.services.v1.SubmitFeedbackRequest\x1a4.schemas.greyseal.services.v1.SubmitFeedbackResponse\"\x00B\x93\x02\n" +
+	" com.schemas.greyseal.services.v1B\x11ConversationProtoP\x01ZIgithub.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services;servicesv1\xa2\x02\x03SGS\xaa\x02\x1cSchemas.Greyseal.Services.V1\xca\x02\x1cSchemas\\Greyseal\\Services\\V1\xe2\x02(Schemas\\Greyseal\\Services\\V1\\GPBMetadata\xea\x02\x1fSchemas::Greyseal::Services::V1b\x06proto3"
 
 var (
 	file_schemas_greyseal_v1_services_conversation_proto_rawDescOnce sync.Once
@@ -791,43 +791,43 @@ func file_schemas_greyseal_v1_services_conversation_proto_rawDescGZIP() []byte {
 
 var file_schemas_greyseal_v1_services_conversation_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_schemas_greyseal_v1_services_conversation_proto_goTypes = []any{
-	(*CreateConversationRequest)(nil),  // 0: schemas.greyseal.v1.services.CreateConversationRequest
-	(*CreateConversationResponse)(nil), // 1: schemas.greyseal.v1.services.CreateConversationResponse
-	(*GetConversationRequest)(nil),     // 2: schemas.greyseal.v1.services.GetConversationRequest
-	(*GetConversationResponse)(nil),    // 3: schemas.greyseal.v1.services.GetConversationResponse
-	(*ListConversationsRequest)(nil),   // 4: schemas.greyseal.v1.services.ListConversationsRequest
-	(*ListConversationsResponse)(nil),  // 5: schemas.greyseal.v1.services.ListConversationsResponse
-	(*UpdateConversationRequest)(nil),  // 6: schemas.greyseal.v1.services.UpdateConversationRequest
-	(*UpdateConversationResponse)(nil), // 7: schemas.greyseal.v1.services.UpdateConversationResponse
-	(*DeleteConversationRequest)(nil),  // 8: schemas.greyseal.v1.services.DeleteConversationRequest
-	(*DeleteConversationResponse)(nil), // 9: schemas.greyseal.v1.services.DeleteConversationResponse
-	(*ChatRequest)(nil),                // 10: schemas.greyseal.v1.services.ChatRequest
-	(*ChatResponse)(nil),               // 11: schemas.greyseal.v1.services.ChatResponse
-	(*SubmitFeedbackRequest)(nil),      // 12: schemas.greyseal.v1.services.SubmitFeedbackRequest
-	(*SubmitFeedbackResponse)(nil),     // 13: schemas.greyseal.v1.services.SubmitFeedbackResponse
+	(*CreateConversationRequest)(nil),  // 0: schemas.greyseal.services.v1.CreateConversationRequest
+	(*CreateConversationResponse)(nil), // 1: schemas.greyseal.services.v1.CreateConversationResponse
+	(*GetConversationRequest)(nil),     // 2: schemas.greyseal.services.v1.GetConversationRequest
+	(*GetConversationResponse)(nil),    // 3: schemas.greyseal.services.v1.GetConversationResponse
+	(*ListConversationsRequest)(nil),   // 4: schemas.greyseal.services.v1.ListConversationsRequest
+	(*ListConversationsResponse)(nil),  // 5: schemas.greyseal.services.v1.ListConversationsResponse
+	(*UpdateConversationRequest)(nil),  // 6: schemas.greyseal.services.v1.UpdateConversationRequest
+	(*UpdateConversationResponse)(nil), // 7: schemas.greyseal.services.v1.UpdateConversationResponse
+	(*DeleteConversationRequest)(nil),  // 8: schemas.greyseal.services.v1.DeleteConversationRequest
+	(*DeleteConversationResponse)(nil), // 9: schemas.greyseal.services.v1.DeleteConversationResponse
+	(*ChatRequest)(nil),                // 10: schemas.greyseal.services.v1.ChatRequest
+	(*ChatResponse)(nil),               // 11: schemas.greyseal.services.v1.ChatResponse
+	(*SubmitFeedbackRequest)(nil),      // 12: schemas.greyseal.services.v1.SubmitFeedbackRequest
+	(*SubmitFeedbackResponse)(nil),     // 13: schemas.greyseal.services.v1.SubmitFeedbackResponse
 	(*v1.Conversation)(nil),            // 14: schemas.greyseal.v1.Conversation
 	(*v1.Message)(nil),                 // 15: schemas.greyseal.v1.Message
 }
 var file_schemas_greyseal_v1_services_conversation_proto_depIdxs = []int32{
-	14, // 0: schemas.greyseal.v1.services.CreateConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
-	14, // 1: schemas.greyseal.v1.services.GetConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
-	14, // 2: schemas.greyseal.v1.services.ListConversationsResponse.data:type_name -> schemas.greyseal.v1.Conversation
-	14, // 3: schemas.greyseal.v1.services.UpdateConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
-	15, // 4: schemas.greyseal.v1.services.ChatResponse.final_message:type_name -> schemas.greyseal.v1.Message
-	0,  // 5: schemas.greyseal.v1.services.ConversationService.CreateConversation:input_type -> schemas.greyseal.v1.services.CreateConversationRequest
-	2,  // 6: schemas.greyseal.v1.services.ConversationService.GetConversation:input_type -> schemas.greyseal.v1.services.GetConversationRequest
-	4,  // 7: schemas.greyseal.v1.services.ConversationService.ListConversations:input_type -> schemas.greyseal.v1.services.ListConversationsRequest
-	6,  // 8: schemas.greyseal.v1.services.ConversationService.UpdateConversation:input_type -> schemas.greyseal.v1.services.UpdateConversationRequest
-	8,  // 9: schemas.greyseal.v1.services.ConversationService.DeleteConversation:input_type -> schemas.greyseal.v1.services.DeleteConversationRequest
-	10, // 10: schemas.greyseal.v1.services.ConversationService.Chat:input_type -> schemas.greyseal.v1.services.ChatRequest
-	12, // 11: schemas.greyseal.v1.services.ConversationService.SubmitFeedback:input_type -> schemas.greyseal.v1.services.SubmitFeedbackRequest
-	1,  // 12: schemas.greyseal.v1.services.ConversationService.CreateConversation:output_type -> schemas.greyseal.v1.services.CreateConversationResponse
-	3,  // 13: schemas.greyseal.v1.services.ConversationService.GetConversation:output_type -> schemas.greyseal.v1.services.GetConversationResponse
-	5,  // 14: schemas.greyseal.v1.services.ConversationService.ListConversations:output_type -> schemas.greyseal.v1.services.ListConversationsResponse
-	7,  // 15: schemas.greyseal.v1.services.ConversationService.UpdateConversation:output_type -> schemas.greyseal.v1.services.UpdateConversationResponse
-	9,  // 16: schemas.greyseal.v1.services.ConversationService.DeleteConversation:output_type -> schemas.greyseal.v1.services.DeleteConversationResponse
-	11, // 17: schemas.greyseal.v1.services.ConversationService.Chat:output_type -> schemas.greyseal.v1.services.ChatResponse
-	13, // 18: schemas.greyseal.v1.services.ConversationService.SubmitFeedback:output_type -> schemas.greyseal.v1.services.SubmitFeedbackResponse
+	14, // 0: schemas.greyseal.services.v1.CreateConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
+	14, // 1: schemas.greyseal.services.v1.GetConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
+	14, // 2: schemas.greyseal.services.v1.ListConversationsResponse.data:type_name -> schemas.greyseal.v1.Conversation
+	14, // 3: schemas.greyseal.services.v1.UpdateConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
+	15, // 4: schemas.greyseal.services.v1.ChatResponse.final_message:type_name -> schemas.greyseal.v1.Message
+	0,  // 5: schemas.greyseal.services.v1.ConversationService.CreateConversation:input_type -> schemas.greyseal.services.v1.CreateConversationRequest
+	2,  // 6: schemas.greyseal.services.v1.ConversationService.GetConversation:input_type -> schemas.greyseal.services.v1.GetConversationRequest
+	4,  // 7: schemas.greyseal.services.v1.ConversationService.ListConversations:input_type -> schemas.greyseal.services.v1.ListConversationsRequest
+	6,  // 8: schemas.greyseal.services.v1.ConversationService.UpdateConversation:input_type -> schemas.greyseal.services.v1.UpdateConversationRequest
+	8,  // 9: schemas.greyseal.services.v1.ConversationService.DeleteConversation:input_type -> schemas.greyseal.services.v1.DeleteConversationRequest
+	10, // 10: schemas.greyseal.services.v1.ConversationService.Chat:input_type -> schemas.greyseal.services.v1.ChatRequest
+	12, // 11: schemas.greyseal.services.v1.ConversationService.SubmitFeedback:input_type -> schemas.greyseal.services.v1.SubmitFeedbackRequest
+	1,  // 12: schemas.greyseal.services.v1.ConversationService.CreateConversation:output_type -> schemas.greyseal.services.v1.CreateConversationResponse
+	3,  // 13: schemas.greyseal.services.v1.ConversationService.GetConversation:output_type -> schemas.greyseal.services.v1.GetConversationResponse
+	5,  // 14: schemas.greyseal.services.v1.ConversationService.ListConversations:output_type -> schemas.greyseal.services.v1.ListConversationsResponse
+	7,  // 15: schemas.greyseal.services.v1.ConversationService.UpdateConversation:output_type -> schemas.greyseal.services.v1.UpdateConversationResponse
+	9,  // 16: schemas.greyseal.services.v1.ConversationService.DeleteConversation:output_type -> schemas.greyseal.services.v1.DeleteConversationResponse
+	11, // 17: schemas.greyseal.services.v1.ConversationService.Chat:output_type -> schemas.greyseal.services.v1.ChatResponse
+	13, // 18: schemas.greyseal.services.v1.ConversationService.SubmitFeedback:output_type -> schemas.greyseal.services.v1.SubmitFeedbackResponse
 	12, // [12:19] is the sub-list for method output_type
 	5,  // [5:12] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name

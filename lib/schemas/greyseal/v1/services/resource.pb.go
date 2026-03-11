@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: schemas/greyseal/v1/services/resource.proto
 
-package services
+package servicesv1
 
 import (
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
@@ -394,7 +394,7 @@ var File_schemas_greyseal_v1_services_resource_proto protoreflect.FileDescriptor
 
 const file_schemas_greyseal_v1_services_resource_proto_rawDesc = "" +
 	"\n" +
-	"+schemas/greyseal/v1/services/resource.proto\x12\x1cschemas.greyseal.v1.services\x1a\"schemas/greyseal/v1/resource.proto\"J\n" +
+	"+schemas/greyseal/v1/services/resource.proto\x12\x1cschemas.greyseal.services.v1\x1a\"schemas/greyseal/v1/resource.proto\"J\n" +
 	"\x15IngestResourceRequest\x121\n" +
 	"\x04data\x18\x01 \x01(\v2\x1d.schemas.greyseal.v1.ResourceR\x04data\"K\n" +
 	"\x16IngestResourceResponse\x121\n" +
@@ -416,11 +416,11 @@ const file_schemas_greyseal_v1_services_resource_proto_rawDesc = "" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\"\x18\n" +
 	"\x16DeleteResourceResponse2\x81\x04\n" +
 	"\x0fResourceService\x12}\n" +
-	"\x0eIngestResource\x123.schemas.greyseal.v1.services.IngestResourceRequest\x1a4.schemas.greyseal.v1.services.IngestResourceResponse\"\x00\x12t\n" +
-	"\vGetResource\x120.schemas.greyseal.v1.services.GetResourceRequest\x1a1.schemas.greyseal.v1.services.GetResourceResponse\"\x00\x12z\n" +
-	"\rListResources\x122.schemas.greyseal.v1.services.ListResourcesRequest\x1a3.schemas.greyseal.v1.services.ListResourcesResponse\"\x00\x12}\n" +
-	"\x0eDeleteResource\x123.schemas.greyseal.v1.services.DeleteResourceRequest\x1a4.schemas.greyseal.v1.services.DeleteResourceResponse\"\x00B\x85\x02\n" +
-	" com.schemas.greyseal.v1.servicesB\rResourceProtoP\x01Z>github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services\xa2\x02\x04SGVS\xaa\x02\x1cSchemas.Greyseal.V1.Services\xca\x02\x1cSchemas\\Greyseal\\V1\\Services\xe2\x02(Schemas\\Greyseal\\V1\\Services\\GPBMetadata\xea\x02\x1fSchemas::Greyseal::V1::Servicesb\x06proto3"
+	"\x0eIngestResource\x123.schemas.greyseal.services.v1.IngestResourceRequest\x1a4.schemas.greyseal.services.v1.IngestResourceResponse\"\x00\x12t\n" +
+	"\vGetResource\x120.schemas.greyseal.services.v1.GetResourceRequest\x1a1.schemas.greyseal.services.v1.GetResourceResponse\"\x00\x12z\n" +
+	"\rListResources\x122.schemas.greyseal.services.v1.ListResourcesRequest\x1a3.schemas.greyseal.services.v1.ListResourcesResponse\"\x00\x12}\n" +
+	"\x0eDeleteResource\x123.schemas.greyseal.services.v1.DeleteResourceRequest\x1a4.schemas.greyseal.services.v1.DeleteResourceResponse\"\x00B\x8f\x02\n" +
+	" com.schemas.greyseal.services.v1B\rResourceProtoP\x01ZIgithub.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services;servicesv1\xa2\x02\x03SGS\xaa\x02\x1cSchemas.Greyseal.Services.V1\xca\x02\x1cSchemas\\Greyseal\\Services\\V1\xe2\x02(Schemas\\Greyseal\\Services\\V1\\GPBMetadata\xea\x02\x1fSchemas::Greyseal::Services::V1b\x06proto3"
 
 var (
 	file_schemas_greyseal_v1_services_resource_proto_rawDescOnce sync.Once
@@ -436,29 +436,29 @@ func file_schemas_greyseal_v1_services_resource_proto_rawDescGZIP() []byte {
 
 var file_schemas_greyseal_v1_services_resource_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_schemas_greyseal_v1_services_resource_proto_goTypes = []any{
-	(*IngestResourceRequest)(nil),  // 0: schemas.greyseal.v1.services.IngestResourceRequest
-	(*IngestResourceResponse)(nil), // 1: schemas.greyseal.v1.services.IngestResourceResponse
-	(*GetResourceRequest)(nil),     // 2: schemas.greyseal.v1.services.GetResourceRequest
-	(*GetResourceResponse)(nil),    // 3: schemas.greyseal.v1.services.GetResourceResponse
-	(*ListResourcesRequest)(nil),   // 4: schemas.greyseal.v1.services.ListResourcesRequest
-	(*ListResourcesResponse)(nil),  // 5: schemas.greyseal.v1.services.ListResourcesResponse
-	(*DeleteResourceRequest)(nil),  // 6: schemas.greyseal.v1.services.DeleteResourceRequest
-	(*DeleteResourceResponse)(nil), // 7: schemas.greyseal.v1.services.DeleteResourceResponse
+	(*IngestResourceRequest)(nil),  // 0: schemas.greyseal.services.v1.IngestResourceRequest
+	(*IngestResourceResponse)(nil), // 1: schemas.greyseal.services.v1.IngestResourceResponse
+	(*GetResourceRequest)(nil),     // 2: schemas.greyseal.services.v1.GetResourceRequest
+	(*GetResourceResponse)(nil),    // 3: schemas.greyseal.services.v1.GetResourceResponse
+	(*ListResourcesRequest)(nil),   // 4: schemas.greyseal.services.v1.ListResourcesRequest
+	(*ListResourcesResponse)(nil),  // 5: schemas.greyseal.services.v1.ListResourcesResponse
+	(*DeleteResourceRequest)(nil),  // 6: schemas.greyseal.services.v1.DeleteResourceRequest
+	(*DeleteResourceResponse)(nil), // 7: schemas.greyseal.services.v1.DeleteResourceResponse
 	(*v1.Resource)(nil),            // 8: schemas.greyseal.v1.Resource
 }
 var file_schemas_greyseal_v1_services_resource_proto_depIdxs = []int32{
-	8, // 0: schemas.greyseal.v1.services.IngestResourceRequest.data:type_name -> schemas.greyseal.v1.Resource
-	8, // 1: schemas.greyseal.v1.services.IngestResourceResponse.data:type_name -> schemas.greyseal.v1.Resource
-	8, // 2: schemas.greyseal.v1.services.GetResourceResponse.data:type_name -> schemas.greyseal.v1.Resource
-	8, // 3: schemas.greyseal.v1.services.ListResourcesResponse.data:type_name -> schemas.greyseal.v1.Resource
-	0, // 4: schemas.greyseal.v1.services.ResourceService.IngestResource:input_type -> schemas.greyseal.v1.services.IngestResourceRequest
-	2, // 5: schemas.greyseal.v1.services.ResourceService.GetResource:input_type -> schemas.greyseal.v1.services.GetResourceRequest
-	4, // 6: schemas.greyseal.v1.services.ResourceService.ListResources:input_type -> schemas.greyseal.v1.services.ListResourcesRequest
-	6, // 7: schemas.greyseal.v1.services.ResourceService.DeleteResource:input_type -> schemas.greyseal.v1.services.DeleteResourceRequest
-	1, // 8: schemas.greyseal.v1.services.ResourceService.IngestResource:output_type -> schemas.greyseal.v1.services.IngestResourceResponse
-	3, // 9: schemas.greyseal.v1.services.ResourceService.GetResource:output_type -> schemas.greyseal.v1.services.GetResourceResponse
-	5, // 10: schemas.greyseal.v1.services.ResourceService.ListResources:output_type -> schemas.greyseal.v1.services.ListResourcesResponse
-	7, // 11: schemas.greyseal.v1.services.ResourceService.DeleteResource:output_type -> schemas.greyseal.v1.services.DeleteResourceResponse
+	8, // 0: schemas.greyseal.services.v1.IngestResourceRequest.data:type_name -> schemas.greyseal.v1.Resource
+	8, // 1: schemas.greyseal.services.v1.IngestResourceResponse.data:type_name -> schemas.greyseal.v1.Resource
+	8, // 2: schemas.greyseal.services.v1.GetResourceResponse.data:type_name -> schemas.greyseal.v1.Resource
+	8, // 3: schemas.greyseal.services.v1.ListResourcesResponse.data:type_name -> schemas.greyseal.v1.Resource
+	0, // 4: schemas.greyseal.services.v1.ResourceService.IngestResource:input_type -> schemas.greyseal.services.v1.IngestResourceRequest
+	2, // 5: schemas.greyseal.services.v1.ResourceService.GetResource:input_type -> schemas.greyseal.services.v1.GetResourceRequest
+	4, // 6: schemas.greyseal.services.v1.ResourceService.ListResources:input_type -> schemas.greyseal.services.v1.ListResourcesRequest
+	6, // 7: schemas.greyseal.services.v1.ResourceService.DeleteResource:input_type -> schemas.greyseal.services.v1.DeleteResourceRequest
+	1, // 8: schemas.greyseal.services.v1.ResourceService.IngestResource:output_type -> schemas.greyseal.services.v1.IngestResourceResponse
+	3, // 9: schemas.greyseal.services.v1.ResourceService.GetResource:output_type -> schemas.greyseal.services.v1.GetResourceResponse
+	5, // 10: schemas.greyseal.services.v1.ResourceService.ListResources:output_type -> schemas.greyseal.services.v1.ListResourcesResponse
+	7, // 11: schemas.greyseal.services.v1.ResourceService.DeleteResource:output_type -> schemas.greyseal.services.v1.DeleteResourceResponse
 	8, // [8:12] is the sub-list for method output_type
 	4, // [4:8] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name

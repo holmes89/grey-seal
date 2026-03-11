@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package schemas.greyseal.v1.services;
+package schemas.greyseal.services.v1;
 
 
 import "schemas/greyseal/v1/conversation.proto";

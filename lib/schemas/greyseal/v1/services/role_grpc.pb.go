@@ -4,7 +4,7 @@
 // - protoc             (unknown)
 // source: schemas/greyseal/v1/services/role.proto
 
-package services
+package servicesv1
 
 import (
 	context "context"
@@ -19,11 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RoleService_CreateRole_FullMethodName = "/schemas.greyseal.v1.services.RoleService/CreateRole"
-	RoleService_GetRole_FullMethodName    = "/schemas.greyseal.v1.services.RoleService/GetRole"
-	RoleService_ListRoles_FullMethodName  = "/schemas.greyseal.v1.services.RoleService/ListRoles"
-	RoleService_UpdateRole_FullMethodName = "/schemas.greyseal.v1.services.RoleService/UpdateRole"
-	RoleService_DeleteRole_FullMethodName = "/schemas.greyseal.v1.services.RoleService/DeleteRole"
+	RoleService_CreateRole_FullMethodName = "/schemas.greyseal.services.v1.RoleService/CreateRole"
+	RoleService_GetRole_FullMethodName    = "/schemas.greyseal.services.v1.RoleService/GetRole"
+	RoleService_ListRoles_FullMethodName  = "/schemas.greyseal.services.v1.RoleService/ListRoles"
+	RoleService_UpdateRole_FullMethodName = "/schemas.greyseal.services.v1.RoleService/UpdateRole"
+	RoleService_DeleteRole_FullMethodName = "/schemas.greyseal.services.v1.RoleService/DeleteRole"
 )
 
 // RoleServiceClient is the client API for RoleService service.
@@ -244,7 +244,7 @@ func _RoleService_DeleteRole_Handler(srv interface{}, ctx context.Context, dec f
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var RoleService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "schemas.greyseal.v1.services.RoleService",
+	ServiceName: "schemas.greyseal.services.v1.RoleService",
 	HandlerType: (*RoleServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: schemas/greyseal/v1/services/role.proto
 
-package services
+package servicesv1
 
 import (
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
@@ -490,7 +490,7 @@ var File_schemas_greyseal_v1_services_role_proto protoreflect.FileDescriptor
 
 const file_schemas_greyseal_v1_services_role_proto_rawDesc = "" +
 	"\n" +
-	"'schemas/greyseal/v1/services/role.proto\x12\x1cschemas.greyseal.v1.services\x1a\x1eschemas/greyseal/v1/role.proto\"B\n" +
+	"'schemas/greyseal/v1/services/role.proto\x12\x1cschemas.greyseal.services.v1\x1a\x1eschemas/greyseal/v1/role.proto\"B\n" +
 	"\x11CreateRoleRequest\x12-\n" +
 	"\x04data\x18\x01 \x01(\v2\x19.schemas.greyseal.v1.RoleR\x04data\"C\n" +
 	"\x12CreateRoleResponse\x12-\n" +
@@ -518,14 +518,14 @@ const file_schemas_greyseal_v1_services_role_proto_rawDesc = "" +
 	"\x12DeleteRoleResponse2\xc0\x04\n" +
 	"\vRoleService\x12q\n" +
 	"\n" +
-	"CreateRole\x12/.schemas.greyseal.v1.services.CreateRoleRequest\x1a0.schemas.greyseal.v1.services.CreateRoleResponse\"\x00\x12h\n" +
-	"\aGetRole\x12,.schemas.greyseal.v1.services.GetRoleRequest\x1a-.schemas.greyseal.v1.services.GetRoleResponse\"\x00\x12n\n" +
-	"\tListRoles\x12..schemas.greyseal.v1.services.ListRolesRequest\x1a/.schemas.greyseal.v1.services.ListRolesResponse\"\x00\x12q\n" +
+	"CreateRole\x12/.schemas.greyseal.services.v1.CreateRoleRequest\x1a0.schemas.greyseal.services.v1.CreateRoleResponse\"\x00\x12h\n" +
+	"\aGetRole\x12,.schemas.greyseal.services.v1.GetRoleRequest\x1a-.schemas.greyseal.services.v1.GetRoleResponse\"\x00\x12n\n" +
+	"\tListRoles\x12..schemas.greyseal.services.v1.ListRolesRequest\x1a/.schemas.greyseal.services.v1.ListRolesResponse\"\x00\x12q\n" +
 	"\n" +
-	"UpdateRole\x12/.schemas.greyseal.v1.services.UpdateRoleRequest\x1a0.schemas.greyseal.v1.services.UpdateRoleResponse\"\x00\x12q\n" +
+	"UpdateRole\x12/.schemas.greyseal.services.v1.UpdateRoleRequest\x1a0.schemas.greyseal.services.v1.UpdateRoleResponse\"\x00\x12q\n" +
 	"\n" +
-	"DeleteRole\x12/.schemas.greyseal.v1.services.DeleteRoleRequest\x1a0.schemas.greyseal.v1.services.DeleteRoleResponse\"\x00B\x81\x02\n" +
-	" com.schemas.greyseal.v1.servicesB\tRoleProtoP\x01Z>github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services\xa2\x02\x04SGVS\xaa\x02\x1cSchemas.Greyseal.V1.Services\xca\x02\x1cSchemas\\Greyseal\\V1\\Services\xe2\x02(Schemas\\Greyseal\\V1\\Services\\GPBMetadata\xea\x02\x1fSchemas::Greyseal::V1::Servicesb\x06proto3"
+	"DeleteRole\x12/.schemas.greyseal.services.v1.DeleteRoleRequest\x1a0.schemas.greyseal.services.v1.DeleteRoleResponse\"\x00B\x8b\x02\n" +
+	" com.schemas.greyseal.services.v1B\tRoleProtoP\x01ZIgithub.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services;servicesv1\xa2\x02\x03SGS\xaa\x02\x1cSchemas.Greyseal.Services.V1\xca\x02\x1cSchemas\\Greyseal\\Services\\V1\xe2\x02(Schemas\\Greyseal\\Services\\V1\\GPBMetadata\xea\x02\x1fSchemas::Greyseal::Services::V1b\x06proto3"
 
 var (
 	file_schemas_greyseal_v1_services_role_proto_rawDescOnce sync.Once
@@ -541,35 +541,35 @@ func file_schemas_greyseal_v1_services_role_proto_rawDescGZIP() []byte {
 
 var file_schemas_greyseal_v1_services_role_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_schemas_greyseal_v1_services_role_proto_goTypes = []any{
-	(*CreateRoleRequest)(nil),  // 0: schemas.greyseal.v1.services.CreateRoleRequest
-	(*CreateRoleResponse)(nil), // 1: schemas.greyseal.v1.services.CreateRoleResponse
-	(*GetRoleRequest)(nil),     // 2: schemas.greyseal.v1.services.GetRoleRequest
-	(*GetRoleResponse)(nil),    // 3: schemas.greyseal.v1.services.GetRoleResponse
-	(*ListRolesRequest)(nil),   // 4: schemas.greyseal.v1.services.ListRolesRequest
-	(*ListRolesResponse)(nil),  // 5: schemas.greyseal.v1.services.ListRolesResponse
-	(*UpdateRoleRequest)(nil),  // 6: schemas.greyseal.v1.services.UpdateRoleRequest
-	(*UpdateRoleResponse)(nil), // 7: schemas.greyseal.v1.services.UpdateRoleResponse
-	(*DeleteRoleRequest)(nil),  // 8: schemas.greyseal.v1.services.DeleteRoleRequest
-	(*DeleteRoleResponse)(nil), // 9: schemas.greyseal.v1.services.DeleteRoleResponse
+	(*CreateRoleRequest)(nil),  // 0: schemas.greyseal.services.v1.CreateRoleRequest
+	(*CreateRoleResponse)(nil), // 1: schemas.greyseal.services.v1.CreateRoleResponse
+	(*GetRoleRequest)(nil),     // 2: schemas.greyseal.services.v1.GetRoleRequest
+	(*GetRoleResponse)(nil),    // 3: schemas.greyseal.services.v1.GetRoleResponse
+	(*ListRolesRequest)(nil),   // 4: schemas.greyseal.services.v1.ListRolesRequest
+	(*ListRolesResponse)(nil),  // 5: schemas.greyseal.services.v1.ListRolesResponse
+	(*UpdateRoleRequest)(nil),  // 6: schemas.greyseal.services.v1.UpdateRoleRequest
+	(*UpdateRoleResponse)(nil), // 7: schemas.greyseal.services.v1.UpdateRoleResponse
+	(*DeleteRoleRequest)(nil),  // 8: schemas.greyseal.services.v1.DeleteRoleRequest
+	(*DeleteRoleResponse)(nil), // 9: schemas.greyseal.services.v1.DeleteRoleResponse
 	(*v1.Role)(nil),            // 10: schemas.greyseal.v1.Role
 }
 var file_schemas_greyseal_v1_services_role_proto_depIdxs = []int32{
-	10, // 0: schemas.greyseal.v1.services.CreateRoleRequest.data:type_name -> schemas.greyseal.v1.Role
-	10, // 1: schemas.greyseal.v1.services.CreateRoleResponse.data:type_name -> schemas.greyseal.v1.Role
-	10, // 2: schemas.greyseal.v1.services.GetRoleResponse.data:type_name -> schemas.greyseal.v1.Role
-	10, // 3: schemas.greyseal.v1.services.ListRolesResponse.data:type_name -> schemas.greyseal.v1.Role
-	10, // 4: schemas.greyseal.v1.services.UpdateRoleRequest.data:type_name -> schemas.greyseal.v1.Role
-	10, // 5: schemas.greyseal.v1.services.UpdateRoleResponse.data:type_name -> schemas.greyseal.v1.Role
-	0,  // 6: schemas.greyseal.v1.services.RoleService.CreateRole:input_type -> schemas.greyseal.v1.services.CreateRoleRequest
-	2,  // 7: schemas.greyseal.v1.services.RoleService.GetRole:input_type -> schemas.greyseal.v1.services.GetRoleRequest
-	4,  // 8: schemas.greyseal.v1.services.RoleService.ListRoles:input_type -> schemas.greyseal.v1.services.ListRolesRequest
-	6,  // 9: schemas.greyseal.v1.services.RoleService.UpdateRole:input_type -> schemas.greyseal.v1.services.UpdateRoleRequest
-	8,  // 10: schemas.greyseal.v1.services.RoleService.DeleteRole:input_type -> schemas.greyseal.v1.services.DeleteRoleRequest
-	1,  // 11: schemas.greyseal.v1.services.RoleService.CreateRole:output_type -> schemas.greyseal.v1.services.CreateRoleResponse
-	3,  // 12: schemas.greyseal.v1.services.RoleService.GetRole:output_type -> schemas.greyseal.v1.services.GetRoleResponse
-	5,  // 13: schemas.greyseal.v1.services.RoleService.ListRoles:output_type -> schemas.greyseal.v1.services.ListRolesResponse
-	7,  // 14: schemas.greyseal.v1.services.RoleService.UpdateRole:output_type -> schemas.greyseal.v1.services.UpdateRoleResponse
-	9,  // 15: schemas.greyseal.v1.services.RoleService.DeleteRole:output_type -> schemas.greyseal.v1.services.DeleteRoleResponse
+	10, // 0: schemas.greyseal.services.v1.CreateRoleRequest.data:type_name -> schemas.greyseal.v1.Role
+	10, // 1: schemas.greyseal.services.v1.CreateRoleResponse.data:type_name -> schemas.greyseal.v1.Role
+	10, // 2: schemas.greyseal.services.v1.GetRoleResponse.data:type_name -> schemas.greyseal.v1.Role
+	10, // 3: schemas.greyseal.services.v1.ListRolesResponse.data:type_name -> schemas.greyseal.v1.Role
+	10, // 4: schemas.greyseal.services.v1.UpdateRoleRequest.data:type_name -> schemas.greyseal.v1.Role
+	10, // 5: schemas.greyseal.services.v1.UpdateRoleResponse.data:type_name -> schemas.greyseal.v1.Role
+	0,  // 6: schemas.greyseal.services.v1.RoleService.CreateRole:input_type -> schemas.greyseal.services.v1.CreateRoleRequest
+	2,  // 7: schemas.greyseal.services.v1.RoleService.GetRole:input_type -> schemas.greyseal.services.v1.GetRoleRequest
+	4,  // 8: schemas.greyseal.services.v1.RoleService.ListRoles:input_type -> schemas.greyseal.services.v1.ListRolesRequest
+	6,  // 9: schemas.greyseal.services.v1.RoleService.UpdateRole:input_type -> schemas.greyseal.services.v1.UpdateRoleRequest
+	8,  // 10: schemas.greyseal.services.v1.RoleService.DeleteRole:input_type -> schemas.greyseal.services.v1.DeleteRoleRequest
+	1,  // 11: schemas.greyseal.services.v1.RoleService.CreateRole:output_type -> schemas.greyseal.services.v1.CreateRoleResponse
+	3,  // 12: schemas.greyseal.services.v1.RoleService.GetRole:output_type -> schemas.greyseal.services.v1.GetRoleResponse
+	5,  // 13: schemas.greyseal.services.v1.RoleService.ListRoles:output_type -> schemas.greyseal.services.v1.ListRolesResponse
+	7,  // 14: schemas.greyseal.services.v1.RoleService.UpdateRole:output_type -> schemas.greyseal.services.v1.UpdateRoleResponse
+	9,  // 15: schemas.greyseal.services.v1.RoleService.DeleteRole:output_type -> schemas.greyseal.services.v1.DeleteRoleResponse
 	11, // [11:16] is the sub-list for method output_type
 	6,  // [6:11] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name

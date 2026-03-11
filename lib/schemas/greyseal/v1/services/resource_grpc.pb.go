@@ -4,7 +4,7 @@
 // - protoc             (unknown)
 // source: schemas/greyseal/v1/services/resource.proto
 
-package services
+package servicesv1
 
 import (
 	context "context"
@@ -19,10 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ResourceService_IngestResource_FullMethodName = "/schemas.greyseal.v1.services.ResourceService/IngestResource"
-	ResourceService_GetResource_FullMethodName    = "/schemas.greyseal.v1.services.ResourceService/GetResource"
-	ResourceService_ListResources_FullMethodName  = "/schemas.greyseal.v1.services.ResourceService/ListResources"
-	ResourceService_DeleteResource_FullMethodName = "/schemas.greyseal.v1.services.ResourceService/DeleteResource"
+	ResourceService_IngestResource_FullMethodName = "/schemas.greyseal.services.v1.ResourceService/IngestResource"
+	ResourceService_GetResource_FullMethodName    = "/schemas.greyseal.services.v1.ResourceService/GetResource"
+	ResourceService_ListResources_FullMethodName  = "/schemas.greyseal.services.v1.ResourceService/ListResources"
+	ResourceService_DeleteResource_FullMethodName = "/schemas.greyseal.services.v1.ResourceService/DeleteResource"
 )
 
 // ResourceServiceClient is the client API for ResourceService service.
@@ -212,7 +212,7 @@ func _ResourceService_DeleteResource_Handler(srv interface{}, ctx context.Contex
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ResourceService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "schemas.greyseal.v1.services.ResourceService",
+	ServiceName: "schemas.greyseal.services.v1.ResourceService",
 	HandlerType: (*ResourceServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

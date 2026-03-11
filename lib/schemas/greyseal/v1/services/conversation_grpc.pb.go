@@ -4,7 +4,7 @@
 // - protoc             (unknown)
 // source: schemas/greyseal/v1/services/conversation.proto
 
-package services
+package servicesv1
 
 import (
 	context "context"
@@ -19,13 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ConversationService_CreateConversation_FullMethodName = "/schemas.greyseal.v1.services.ConversationService/CreateConversation"
-	ConversationService_GetConversation_FullMethodName    = "/schemas.greyseal.v1.services.ConversationService/GetConversation"
-	ConversationService_ListConversations_FullMethodName  = "/schemas.greyseal.v1.services.ConversationService/ListConversations"
-	ConversationService_UpdateConversation_FullMethodName = "/schemas.greyseal.v1.services.ConversationService/UpdateConversation"
-	ConversationService_DeleteConversation_FullMethodName = "/schemas.greyseal.v1.services.ConversationService/DeleteConversation"
-	ConversationService_Chat_FullMethodName               = "/schemas.greyseal.v1.services.ConversationService/Chat"
-	ConversationService_SubmitFeedback_FullMethodName     = "/schemas.greyseal.v1.services.ConversationService/SubmitFeedback"
+	ConversationService_CreateConversation_FullMethodName = "/schemas.greyseal.services.v1.ConversationService/CreateConversation"
+	ConversationService_GetConversation_FullMethodName    = "/schemas.greyseal.services.v1.ConversationService/GetConversation"
+	ConversationService_ListConversations_FullMethodName  = "/schemas.greyseal.services.v1.ConversationService/ListConversations"
+	ConversationService_UpdateConversation_FullMethodName = "/schemas.greyseal.services.v1.ConversationService/UpdateConversation"
+	ConversationService_DeleteConversation_FullMethodName = "/schemas.greyseal.services.v1.ConversationService/DeleteConversation"
+	ConversationService_Chat_FullMethodName               = "/schemas.greyseal.services.v1.ConversationService/Chat"
+	ConversationService_SubmitFeedback_FullMethodName     = "/schemas.greyseal.services.v1.ConversationService/SubmitFeedback"
 )
 
 // ConversationServiceClient is the client API for ConversationService service.
@@ -318,7 +318,7 @@ func _ConversationService_SubmitFeedback_Handler(srv interface{}, ctx context.Co
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ConversationService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "schemas.greyseal.v1.services.ConversationService",
+	ServiceName: "schemas.greyseal.services.v1.ConversationService",
 	HandlerType: (*ConversationServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
