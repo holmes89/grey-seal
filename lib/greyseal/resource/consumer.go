@@ -1,66 +1,45 @@
-//go:build ignore
-
 package resource
+
 import (
 	"context"
 	"log"
 
-	"github.com/google/uuid"
 	"github.com/holmes89/archaea/base"
-	entitiesv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
-	servicesv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services"
+	. "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"google.golang.org/protobuf/proto"
 )
 
 type ResourceConsumer struct {
-	consumer    base.Consumer[*entitiesv1.Resource]
-	resourceservice base.Service[*entitiesv1.Resource]
+	consumer        base.Consumer[*Resource]
+	resourceService ResourceService
 }
 
 func NewResourceConsumer(
-	consumer base.Consumer[*entitiesv1.Resource],
-	resourceservice base.Service[*entitiesv1.Resource],
+	consumer base.Consumer[*Resource],
+	resourceService ResourceService,
 ) {
-	con := &ResourceConsumer{
-		consumer:    consumer,
-		resourceservice: resourceservice,
+	c := &ResourceConsumer{
+		consumer:        consumer,
+		resourceService: resourceService,
 	}
-	go con.run()
+	go c.run()
 }
 
-func ConvertProto(data []byte) (*entitiesv1.Resource, error) {
-	var msg entitiesv1.Resource
-	log.Println("message", string(data))
+func ConvertProto(data []byte) (*Resource, error) {
+	var msg Resource
 	if err := proto.Unmarshal(data, &msg); err != nil {
-		log.Printf("unable to process message: %s\n", err)
+		log.Printf("unable to unmarshal resource: %s\n", err)
 		return nil, err
 	}
 	return &msg, nil
 }
 
 func (c *ResourceConsumer) run() {
-	for i := range c.consumer.Read() {
-
-		resource := &entitiesv1.Resource{
-			Uuid: uuid.New().String(),
-			Name: i.Name,
-			Service: i.Service,
-			Entity: i.Entity,
-			Source: i.Source,
-			Path: i.Path,
-			CreatedAt: i.CreatedAt,
-			IndexedAt: i.IndexedAt,
-			
-		}
-
-		_, err := c.resourceservice.Create(context.Background(), &servicesv1.CreateResourceRequest{
-			Data: resource,
-		})
-		if err != nil {
-			log.Println(err)
+	for r := range c.consumer.Read() {
+		if _, err := c.resourceService.Ingest(context.Background(), r); err != nil {
+			log.Printf("failed to ingest resource %s: %v\n", r.Uuid, err)
 			continue
 		}
-		log.Printf("resource %s was imported\n", i.Uuid)
+		log.Printf("ingested resource %s\n", r.Uuid)
 	}
 }
-
