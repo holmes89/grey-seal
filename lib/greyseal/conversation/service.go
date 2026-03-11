@@ -209,10 +209,14 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		return nil, fmt.Errorf("failed to save assistant message: %w", err)
 	}
 
-	// Update conversation updated_at
+	// Update conversation updated_at (preserve existing fields to avoid overwriting with nulls)
 	_ = srv.conversationRepo.Update(ctx, conversationUUID, &Conversation{
-		Uuid:      conversationUUID,
-		UpdatedAt: timestamppb.New(time.Now()),
+		Uuid:          conversationUUID,
+		Title:         conv.Title,
+		RoleUuid:      conv.RoleUuid,
+		ResourceUuids: conv.ResourceUuids,
+		Summary:       conv.Summary,
+		UpdatedAt:     timestamppb.New(time.Now()),
 	})
 
 	return assistantMsg, nil

@@ -18,7 +18,15 @@ func (l *LoadingState) Render() app.UI {
 	return app.Div().
 		Body(
 			app.If(l.Loading,
-				app.Div().Class("loading").Text("Loading..."),
+				app.Div().Class("loading").Body(
+					app.Div().Class("wave-bars").Body(
+						app.Span(),
+						app.Span(),
+						app.Span(),
+						app.Span(),
+						app.Span(),
+					),
+				),
 			),
 			app.If(l.Error != "",
 				app.Div().Class("error").Text(l.Error),
