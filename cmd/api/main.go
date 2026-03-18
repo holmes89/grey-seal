@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"connectrpc.com/connect"
 	connectcors "connectrpc.com/cors"
 	"github.com/rs/cors"
 	"golang.org/x/net/http2"
@@ -16,15 +17,13 @@ import (
 
 	conversationsvc "github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	conversationgrpc "github.com/holmes89/grey-seal/lib/greyseal/conversation/grpc"
-	resourcesvc "github.com/holmes89/grey-seal/lib/greyseal/resource"
-	resourcegrpc "github.com/holmes89/grey-seal/lib/greyseal/resource/grpc"
 	rolesvc "github.com/holmes89/grey-seal/lib/greyseal/role"
 	rolegrpc "github.com/holmes89/grey-seal/lib/greyseal/role/grpc"
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/holmes89/grey-seal/lib/repo/ollama"
-	"github.com/holmes89/grey-seal/lib/repo/qdrant"
-	"github.com/holmes89/grey-seal/lib/repo/scraper"
 	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
+	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1/services"
+	shrikeconnect "github.com/holmes89/shrike/lib/schemas/shrike/v1/services/servicesv1connect"
 )
 
 func main() {
@@ -35,14 +34,14 @@ func main() {
 	}
 	defer store.Close()
 
-	vectorRepo, err := qdrant.NewResourceVectorRepo()
-	if err != nil {
-		log.Fatalf("failed to connect to qdrant: %v", err)
-	}
-
-	ollamaEmbedder := ollama.NewEmbedder()
 	ollamaLLM := ollama.NewLLM()
-	webScraper := scraper.NewScraper()
+
+	shrikeURL := os.Getenv("SHRIKE_URL")
+	if shrikeURL == "" {
+		shrikeURL = "http://shrike:9000"
+	}
+	shrikeClient := shrikeconnect.NewSearchServiceClient(&http.Client{}, shrikeURL)
+	searcher := &shrikeSearcher{client: shrikeClient}
 
 	mux := http.NewServeMux()
 
@@ -52,25 +51,13 @@ func main() {
 	rolePath, roleHandler := servicesconnect.NewRoleServiceHandler(rolegrpc.NewRoleHandler(roleSvc))
 	mux.Handle(rolePath, withCORS(roleHandler))
 
-	// Resource service
-	resourceSvc := resourcesvc.NewResourceService(
-		&repo.ResourceRepo{Conn: store},
-		vectorRepo,
-		ollamaEmbedder,
-		webScraper,
-	)
-	resourcePath, resourceHandler := servicesconnect.NewResourceServiceHandler(resourcegrpc.NewResourceHandler(resourceSvc))
-	mux.Handle(resourcePath, withCORS(resourceHandler))
-
 	// Conversation service
 	convRepo := repo.NewConversationRepo(store)
 	messageRepo := &repo.MessageRepo{Conn: store}
-	qdrantQuerier := &qdrantVectorQuerier{repo: vectorRepo}
 	convSvc := conversationsvc.NewConversationService(
 		convRepo,
 		messageRepo,
-		qdrantQuerier,
-		ollamaEmbedder,
+		searcher,
 		roleRepo,
 		ollamaLLM,
 	)
@@ -104,23 +91,28 @@ func withCORS(h http.Handler) http.Handler {
 	}).Handler(h)
 }
 
-// qdrantVectorQuerier adapts *qdrant.ResourceVectorRepo to conversation.VectorQuerier.
-type qdrantVectorQuerier struct {
-	repo *qdrant.ResourceVectorRepo
+// shrikeSearcher adapts the shrike SearchServiceClient to conversation.Searcher.
+type shrikeSearcher struct {
+	client shrikeconnect.SearchServiceClient
 }
 
-func (q *qdrantVectorQuerier) Query(ctx context.Context, queryVector []float32, limit uint64, resourceUUIDs []string) ([]conversationsvc.QueryResult, error) {
-	results, err := q.repo.Query(ctx, queryVector, limit, resourceUUIDs)
+func (s *shrikeSearcher) Search(ctx context.Context, query string, limit int32) ([]conversationsvc.SearchResult, error) {
+	resp, err := s.client.Search(ctx, connect.NewRequest(&shrikev1.SearchRequest{
+		Query: query,
+		Limit: limit,
+		Mode:  "hybrid",
+	}))
 	if err != nil {
 		return nil, err
 	}
-	out := make([]conversationsvc.QueryResult, 0, len(results))
-	for _, r := range results {
-		out = append(out, conversationsvc.QueryResult{
-			ResourceUUID: r.ResourceUUID,
-			Content:      r.Content,
-			Score:        r.Score,
+	results := make([]conversationsvc.SearchResult, 0, len(resp.Msg.GetResults()))
+	for _, r := range resp.Msg.GetResults() {
+		results = append(results, conversationsvc.SearchResult{
+			EntityUUID: r.GetEntityUuid(),
+			Title:      r.GetTitle(),
+			Snippet:    r.GetSnippet(),
+			Score:      r.GetScore(),
 		})
 	}
-	return out, nil
+	return results, nil
 }

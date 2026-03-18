@@ -48,21 +48,17 @@ type ConversationRepository interface {
 var _ base.Entity = (*Conversation)(nil)
 var _ base.Repository[*Conversation] = (ConversationRepository)(nil)
 
-// QueryResult holds a single vector search result.
-type QueryResult struct {
-	ResourceUUID string
-	Content      string
-	Score        float32
+// SearchResult holds a single search result from shrike.
+type SearchResult struct {
+	EntityUUID string
+	Title      string
+	Snippet    string
+	Score      float32
 }
 
-// VectorQuerier retrieves relevant chunks from the vector store.
-type VectorQuerier interface {
-	Query(ctx context.Context, queryVector []float32, limit uint64, resourceUUIDs []string) ([]QueryResult, error)
-}
-
-// Embedder generates embeddings for a list of text documents.
-type Embedder interface {
-	EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error)
+// Searcher retrieves relevant results from the search service (shrike).
+type Searcher interface {
+	Search(ctx context.Context, query string, limit int32) ([]SearchResult, error)
 }
 
 // RoleRepository fetches role data by UUID.

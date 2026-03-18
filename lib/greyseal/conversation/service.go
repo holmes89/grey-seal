@@ -29,25 +29,22 @@ type LLMMessage struct {
 type conversationService struct {
 	conversationRepo base.Repository[*Conversation]
 	messageRepo      MessageRepository
-	vectorQuerier    VectorQuerier // optional
-	embedder         Embedder     // optional
+	searcher         Searcher       // optional
 	roleRepo         RoleRepository // optional
-	llm              LLM          // optional
+	llm              LLM            // optional
 }
 
 func NewConversationService(
 	conversationRepo base.Repository[*Conversation],
 	messageRepo MessageRepository,
-	vectorQuerier VectorQuerier,
-	embedder Embedder,
+	searcher Searcher,
 	roleRepo RoleRepository,
 	llm LLM,
 ) ConversationService {
 	return &conversationService{
 		conversationRepo: conversationRepo,
 		messageRepo:      messageRepo,
-		vectorQuerier:    vectorQuerier,
-		embedder:         embedder,
+		searcher:         searcher,
 		roleRepo:         roleRepo,
 		llm:              llm,
 	}
@@ -145,22 +142,18 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		history = history[len(history)-10:]
 	}
 
-	// 5. Generate embedding for the user's content and query Qdrant
-	if srv.embedder != nil && srv.vectorQuerier != nil {
-		embeddings, err := srv.embedder.EmbedDocuments(ctx, []string{content})
-		if err == nil && len(embeddings) > 0 {
-			results, err := srv.vectorQuerier.Query(ctx, embeddings[0], 5, conv.ResourceUuids)
-			if err == nil && len(results) > 0 {
-				// 7. Build context message
-				var contextParts []string
-				for i, r := range results {
-					contextParts = append(contextParts, fmt.Sprintf("%d. %s", i+1, r.Content))
-				}
-				llmMessages = append(llmMessages, LLMMessage{
-					Role:    "system",
-					Content: "Here is relevant context:\n" + strings.Join(contextParts, "\n"),
-				})
+	// 5. Search shrike for relevant context
+	if srv.searcher != nil {
+		results, err := srv.searcher.Search(ctx, content, 5)
+		if err == nil && len(results) > 0 {
+			var contextParts []string
+			for i, r := range results {
+				contextParts = append(contextParts, fmt.Sprintf("%d. %s", i+1, r.Snippet))
 			}
+			llmMessages = append(llmMessages, LLMMessage{
+				Role:    "system",
+				Content: "Here is relevant context:\n" + strings.Join(contextParts, "\n"),
+			})
 		}
 	}
 
