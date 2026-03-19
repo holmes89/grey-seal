@@ -142,9 +142,9 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		history = history[len(history)-10:]
 	}
 
-	// 5. Search shrike for relevant context
+	// 5. Search shrike for relevant context (scoped to conversation resources if set)
 	if srv.searcher != nil {
-		results, err := srv.searcher.Search(ctx, content, 5)
+		results, err := srv.searcher.Search(ctx, content, 5, conv.ResourceUuids)
 		if err == nil && len(results) > 0 {
 			var contextParts []string
 			for i, r := range results {

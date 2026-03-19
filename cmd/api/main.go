@@ -96,7 +96,7 @@ type shrikeSearcher struct {
 	client shrikeconnect.SearchServiceClient
 }
 
-func (s *shrikeSearcher) Search(ctx context.Context, query string, limit int32) ([]conversationsvc.SearchResult, error) {
+func (s *shrikeSearcher) Search(ctx context.Context, query string, limit int32, resourceUUIDs []string) ([]conversationsvc.SearchResult, error) {
 	resp, err := s.client.Search(ctx, connect.NewRequest(&shrikev1.SearchRequest{
 		Query: query,
 		Limit: limit,
@@ -105,8 +105,22 @@ func (s *shrikeSearcher) Search(ctx context.Context, query string, limit int32) 
 	if err != nil {
 		return nil, err
 	}
+
+	// Build lookup set for fast filtering.
+	var uuidSet map[string]bool
+	if len(resourceUUIDs) > 0 {
+		uuidSet = make(map[string]bool, len(resourceUUIDs))
+		for _, id := range resourceUUIDs {
+			uuidSet[id] = true
+		}
+	}
+
 	results := make([]conversationsvc.SearchResult, 0, len(resp.Msg.GetResults()))
 	for _, r := range resp.Msg.GetResults() {
+		// If the conversation scopes to specific resources, skip unrelated results.
+		if uuidSet != nil && !uuidSet[r.GetEntityUuid()] {
+			continue
+		}
 		results = append(results, conversationsvc.SearchResult{
 			EntityUUID: r.GetEntityUuid(),
 			Title:      r.GetTitle(),

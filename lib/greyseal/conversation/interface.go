@@ -57,8 +57,9 @@ type SearchResult struct {
 }
 
 // Searcher retrieves relevant results from the search service (shrike).
+// resourceUUIDs restricts results to those entities; if empty all indexed content is searched.
 type Searcher interface {
-	Search(ctx context.Context, query string, limit int32) ([]SearchResult, error)
+	Search(ctx context.Context, query string, limit int32, resourceUUIDs []string) ([]SearchResult, error)
 }
 
 // RoleRepository fetches role data by UUID.
