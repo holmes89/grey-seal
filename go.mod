@@ -1,6 +1,6 @@
 module github.com/holmes89/grey-seal
 
-go 1.25.4
+go 1.25
 
 require (
 	connectrpc.com/connect v1.19.1

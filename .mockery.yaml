@@ -1,0 +1,15 @@
+version: "2"
+with-expecter: true
+packages:
+  github.com/holmes89/grey-seal/lib/greyseal/conversation:
+    config:
+      dir: "lib/greyseal/conversation/mocks"
+      outpkg: "mocks"
+      mockname: "Mock{{.InterfaceName}}"
+      filename: "mock_{{.InterfaceName | lower}}.go"
+  github.com/holmes89/grey-seal/lib/greyseal/role:
+    config:
+      dir: "lib/greyseal/role/mocks"
+      outpkg: "mocks"
+      mockname: "Mock{{.InterfaceName}}"
+      filename: "mock_{{.InterfaceName | lower}}.go"
