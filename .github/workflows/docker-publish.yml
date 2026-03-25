@@ -32,9 +32,9 @@ jobs:
         run: go vet ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.64
+          version: v2.11
 
       - name: Unit Tests
         run: go test -race ./...

@@ -4,14 +4,13 @@ import (
 	"context"
 
 	"github.com/holmes89/archaea/base"
-	. "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
+	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 )
 
 type RoleService interface {
-	List(con context.Context, lis base.ListRequest) (base.ListResponse[*Role], error)
-	Get(con context.Context, get base.GetRequest[*Role]) (base.GetResponse[*Role], error)
-	Create(con context.Context, cre base.CreateRequest[*Role]) (base.CreateResponse[*Role], error)
-	Update(con context.Context, id string, data *Role) (*Role, error)
+	List(con context.Context, lis base.ListRequest) (base.ListResponse[*greysealv1.Role], error)
+	Get(con context.Context, get base.GetRequest[*greysealv1.Role]) (base.GetResponse[*greysealv1.Role], error)
+	Create(con context.Context, cre base.CreateRequest[*greysealv1.Role]) (base.CreateResponse[*greysealv1.Role], error)
+	Update(con context.Context, id string, data *greysealv1.Role) (*greysealv1.Role, error)
 	Delete(con context.Context, id string) error
 }
-

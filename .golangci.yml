@@ -9,14 +9,14 @@ linters:
     - staticcheck
     - misspell
     - unused
-
-issues:
-  exclude-rules:
-    - path: lib/schemas/
-      linters:
+  exclusions:
+    rules:
+      - path: lib/schemas/
+        linters:
         - errcheck
         - unused
         - staticcheck
-    - path: _test\.go
-      linters:
+      - path: _test\.go
+        linters:
         - errcheck
+

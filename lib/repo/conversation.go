@@ -7,7 +7,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/holmes89/archaea/base"
-	. "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
+	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/lib/pq"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -17,9 +17,9 @@ type MessageRepo struct {
 	*Conn
 }
 
-var _ base.Repository[*Message] = (*MessageRepo)(nil)
+var _ base.Repository[*greysealv1.Message] = (*MessageRepo)(nil)
 
-func (r *MessageRepo) Create(ctx context.Context, b *Message) error {
+func (r *MessageRepo) Create(ctx context.Context, b *greysealv1.Message) error {
 	resourceUUIDs := b.ResourceUuids
 	if resourceUUIDs == nil {
 		resourceUUIDs = []string{}
@@ -38,7 +38,7 @@ func (r *MessageRepo) Create(ctx context.Context, b *Message) error {
 	return err
 }
 
-func (r *MessageRepo) Update(ctx context.Context, id string, b *Message) error {
+func (r *MessageRepo) Update(ctx context.Context, id string, b *greysealv1.Message) error {
 	resourceUUIDs := b.ResourceUuids
 	if resourceUUIDs == nil {
 		resourceUUIDs = []string{}
@@ -68,8 +68,8 @@ func (r *MessageRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *MessageRepo) Get(ctx context.Context, id string) (*Message, error) {
-	message := &Message{}
+func (r *MessageRepo) Get(ctx context.Context, id string) (*greysealv1.Message, error) {
+	message := &greysealv1.Message{}
 	var roleVal int32
 	var createdAtDt time.Time
 	err := sq.StatementBuilder.
@@ -92,12 +92,12 @@ func (r *MessageRepo) Get(ctx context.Context, id string) (*Message, error) {
 		fmt.Println("error getting message", err)
 		return nil, err
 	}
-	message.Role = MessageRole(roleVal)
+	message.Role = greysealv1.MessageRole(roleVal)
 	message.CreatedAt = timestamppb.New(createdAtDt)
 	return message, nil
 }
 
-func (r *MessageRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*Message, error) {
+func (r *MessageRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*greysealv1.Message, error) {
 	q := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
 		Select("uuid", "conversation_uuid", "role", "content", "resource_uuids", "feedback", "created_at").
@@ -113,11 +113,11 @@ func (r *MessageRepo) List(ctx context.Context, cursor string, limit uint, filte
 		fmt.Println("error listing messages", err)
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
-	var messages []*Message
+	var messages []*greysealv1.Message
 	for rows.Next() {
-		message := &Message{}
+		message := &greysealv1.Message{}
 		var roleVal int32
 		var createdAtDt time.Time
 		err := rows.Scan(
@@ -133,7 +133,7 @@ func (r *MessageRepo) List(ctx context.Context, cursor string, limit uint, filte
 			fmt.Println("error scanning message", err)
 			return nil, err
 		}
-		message.Role = MessageRole(roleVal)
+		message.Role = greysealv1.MessageRole(roleVal)
 		message.CreatedAt = timestamppb.New(createdAtDt)
 		messages = append(messages, message)
 	}
@@ -141,7 +141,7 @@ func (r *MessageRepo) List(ctx context.Context, cursor string, limit uint, filte
 }
 
 // ListByConversation fetches all messages for a given conversation UUID ordered by created_at.
-func (r *MessageRepo) ListByConversation(ctx context.Context, conversationUUID string) ([]*Message, error) {
+func (r *MessageRepo) ListByConversation(ctx context.Context, conversationUUID string) ([]*greysealv1.Message, error) {
 	return r.List(ctx, "", 0, map[string][]any{"conversation_uuid": {conversationUUID}})
 }
 
@@ -173,9 +173,9 @@ func NewConversationRepo(conn *Conn) *ConversationRepo {
 	}
 }
 
-var _ base.Repository[*Conversation] = (*ConversationRepo)(nil)
+var _ base.Repository[*greysealv1.Conversation] = (*ConversationRepo)(nil)
 
-func (r *ConversationRepo) Create(ctx context.Context, b *Conversation) error {
+func (r *ConversationRepo) Create(ctx context.Context, b *greysealv1.Conversation) error {
 	resourceUUIDs := b.ResourceUuids
 	if resourceUUIDs == nil {
 		resourceUUIDs = []string{}
@@ -194,7 +194,7 @@ func (r *ConversationRepo) Create(ctx context.Context, b *Conversation) error {
 	return err
 }
 
-func (r *ConversationRepo) Update(ctx context.Context, id string, b *Conversation) error {
+func (r *ConversationRepo) Update(ctx context.Context, id string, b *greysealv1.Conversation) error {
 	resourceUUIDs := b.ResourceUuids
 	if resourceUUIDs == nil {
 		resourceUUIDs = []string{}
@@ -226,8 +226,8 @@ func (r *ConversationRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *ConversationRepo) Get(ctx context.Context, id string) (*Conversation, error) {
-	conversation := &Conversation{}
+func (r *ConversationRepo) Get(ctx context.Context, id string) (*greysealv1.Conversation, error) {
+	conversation := &greysealv1.Conversation{}
 	var createdAtDt time.Time
 	var updatedAtDt time.Time
 	err := sq.StatementBuilder.
@@ -261,7 +261,7 @@ func (r *ConversationRepo) Get(ctx context.Context, id string) (*Conversation, e
 	return conversation, nil
 }
 
-func (r *ConversationRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*Conversation, error) {
+func (r *ConversationRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*greysealv1.Conversation, error) {
 	rows, err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
 		Select("uuid", "title", "role_uuid", "resource_uuids", "summary", "created_at", "updated_at").
@@ -273,11 +273,11 @@ func (r *ConversationRepo) List(ctx context.Context, cursor string, limit uint, 
 		fmt.Println("error listing conversations", err)
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
-	var conversations []*Conversation
+	var conversations []*greysealv1.Conversation
 	for rows.Next() {
-		conversation := &Conversation{}
+		conversation := &greysealv1.Conversation{}
 		var createdAtDt time.Time
 		var updatedAtDt time.Time
 		err := rows.Scan(
@@ -299,4 +299,3 @@ func (r *ConversationRepo) List(ctx context.Context, cursor string, limit uint, 
 	}
 	return conversations, nil
 }
-

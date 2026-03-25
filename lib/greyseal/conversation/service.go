@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/holmes89/archaea/base"
-	. "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
+	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -27,7 +27,7 @@ type LLMMessage struct {
 }
 
 type conversationService struct {
-	conversationRepo base.Repository[*Conversation]
+	conversationRepo base.Repository[*greysealv1.Conversation]
 	messageRepo      MessageRepository
 	searcher         Searcher       // optional
 	roleRepo         RoleRepository // optional
@@ -35,7 +35,7 @@ type conversationService struct {
 }
 
 func NewConversationService(
-	conversationRepo base.Repository[*Conversation],
+	conversationRepo base.Repository[*greysealv1.Conversation],
 	messageRepo MessageRepository,
 	searcher Searcher,
 	roleRepo RoleRepository,
@@ -50,21 +50,21 @@ func NewConversationService(
 	}
 }
 
-func (srv *conversationService) List(ctx context.Context, lis base.ListRequest) (base.ListResponse[*Conversation], error) {
+func (srv *conversationService) List(ctx context.Context, lis base.ListRequest) (base.ListResponse[*greysealv1.Conversation], error) {
 	data, err := srv.conversationRepo.List(ctx, lis.GetCursor(), uint(lis.GetCount()), nil)
-	return &base.ListGenericResponse[*Conversation]{
+	return &base.ListGenericResponse[*greysealv1.Conversation]{
 		Cursor: "",
 		Count:  int32(len(data)),
 		Data:   data,
 	}, err
 }
 
-func (srv *conversationService) Get(ctx context.Context, get base.GetRequest[*Conversation]) (base.GetResponse[*Conversation], error) {
+func (srv *conversationService) Get(ctx context.Context, get base.GetRequest[*greysealv1.Conversation]) (base.GetResponse[*greysealv1.Conversation], error) {
 	data, err := srv.conversationRepo.Get(ctx, get.GetUuid())
-	return &base.GetGenericResponse[*Conversation]{Data: data}, err
+	return &base.GetGenericResponse[*greysealv1.Conversation]{Data: data}, err
 }
 
-func (srv *conversationService) Create(ctx context.Context, data *Conversation) (*Conversation, error) {
+func (srv *conversationService) Create(ctx context.Context, data *greysealv1.Conversation) (*greysealv1.Conversation, error) {
 	if data.Uuid == "" {
 		data.Uuid = uuid.New().String()
 	}
@@ -79,7 +79,7 @@ func (srv *conversationService) Create(ctx context.Context, data *Conversation) 
 	return data, nil
 }
 
-func (srv *conversationService) Update(ctx context.Context, id string, data *Conversation) (*Conversation, error) {
+func (srv *conversationService) Update(ctx context.Context, id string, data *greysealv1.Conversation) (*greysealv1.Conversation, error) {
 	data.UpdatedAt = timestamppb.New(time.Now())
 	err := srv.conversationRepo.Update(ctx, id, data)
 	if err != nil {
@@ -92,12 +92,12 @@ func (srv *conversationService) Delete(ctx context.Context, id string) error {
 	return srv.conversationRepo.Delete(ctx, id)
 }
 
-func (srv *conversationService) Chat(ctx context.Context, conversationUUID string, content string, stream func(token string) error) (*Message, error) {
+func (srv *conversationService) Chat(ctx context.Context, conversationUUID string, content string, stream func(token string) error) (*greysealv1.Message, error) {
 	// 1. Save user message to DB
-	userMsg := &Message{
+	userMsg := &greysealv1.Message{
 		Uuid:             uuid.New().String(),
 		ConversationUuid: conversationUUID,
-		Role:             MessageRole_MESSAGE_ROLE_USER,
+		Role:             greysealv1.MessageRole_MESSAGE_ROLE_USER,
 		Content:          content,
 		CreatedAt:        timestamppb.New(time.Now()),
 	}
@@ -160,7 +160,7 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	// 8. Add message history
 	for _, msg := range history {
 		role := "user"
-		if msg.Role == MessageRole_MESSAGE_ROLE_ASSISTANT {
+		if msg.Role == greysealv1.MessageRole_MESSAGE_ROLE_ASSISTANT {
 			role = "assistant"
 		}
 		llmMessages = append(llmMessages, LLMMessage{
@@ -190,10 +190,10 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	}
 
 	// 10. Save assistant message to DB
-	assistantMsg := &Message{
+	assistantMsg := &greysealv1.Message{
 		Uuid:             uuid.New().String(),
 		ConversationUuid: conversationUUID,
-		Role:             MessageRole_MESSAGE_ROLE_ASSISTANT,
+		Role:             greysealv1.MessageRole_MESSAGE_ROLE_ASSISTANT,
 		Content:          responseContent,
 		CreatedAt:        timestamppb.New(time.Now()),
 	}
@@ -203,7 +203,7 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	}
 
 	// Update conversation updated_at (preserve existing fields to avoid overwriting with nulls)
-	_ = srv.conversationRepo.Update(ctx, conversationUUID, &Conversation{
+	_ = srv.conversationRepo.Update(ctx, conversationUUID, &greysealv1.Conversation{
 		Uuid:          conversationUUID,
 		Title:         conv.Title,
 		RoleUuid:      conv.RoleUuid,

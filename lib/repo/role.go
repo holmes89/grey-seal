@@ -7,7 +7,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/holmes89/archaea/base"
-	. "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
+	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -15,9 +15,9 @@ type RoleRepo struct {
 	*Conn
 }
 
-var _ base.Repository[*Role] = (*RoleRepo)(nil)
+var _ base.Repository[*greysealv1.Role] = (*RoleRepo)(nil)
 
-func (r *RoleRepo) Create(ctx context.Context, b *Role) error {
+func (r *RoleRepo) Create(ctx context.Context, b *greysealv1.Role) error {
 	_, err := sq.StatementBuilder.PlaceholderFormat(sq.Dollar).Insert("roles").
 		Columns("uuid", "name", "system_prompt", "created_at").
 		Values(
@@ -33,7 +33,7 @@ func (r *RoleRepo) Create(ctx context.Context, b *Role) error {
 	return nil
 }
 
-func (r *RoleRepo) Update(ctx context.Context, id string, b *Role) error {
+func (r *RoleRepo) Update(ctx context.Context, id string, b *greysealv1.Role) error {
 	query, args, err := sq.Update("roles").
 		Set("name", b.Name).
 		Set("system_prompt", b.SystemPrompt).
@@ -57,8 +57,8 @@ func (r *RoleRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *RoleRepo) Get(ctx context.Context, id string) (*Role, error) {
-	role := &Role{}
+func (r *RoleRepo) Get(ctx context.Context, id string) (*greysealv1.Role, error) {
+	role := &greysealv1.Role{}
 	var created_atDt time.Time
 	err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
@@ -81,8 +81,8 @@ func (r *RoleRepo) Get(ctx context.Context, id string) (*Role, error) {
 	return role, nil
 }
 
-func (r *RoleRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*Role, error) {
-	var roles []*Role
+func (r *RoleRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*greysealv1.Role, error) {
+	var roles []*greysealv1.Role
 
 	rows, err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
@@ -94,9 +94,9 @@ func (r *RoleRepo) List(ctx context.Context, cursor string, limit uint, filter m
 		fmt.Println("error listing roles", err)
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 	for rows.Next() {
-		role := &Role{}
+		role := &greysealv1.Role{}
 		var created_atDt time.Time
 		err := rows.Scan(
 			&role.Uuid,

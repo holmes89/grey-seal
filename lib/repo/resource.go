@@ -7,7 +7,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/holmes89/archaea/base"
-	. "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
+	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -15,9 +15,9 @@ type ResourceRepo struct {
 	*Conn
 }
 
-var _ base.Repository[*Resource] = (*ResourceRepo)(nil)
+var _ base.Repository[*greysealv1.Resource] = (*ResourceRepo)(nil)
 
-func (r *ResourceRepo) Create(ctx context.Context, b *Resource) error {
+func (r *ResourceRepo) Create(ctx context.Context, b *greysealv1.Resource) error {
 	_, err := sq.StatementBuilder.PlaceholderFormat(sq.Dollar).Insert("resources").
 		Columns("uuid", "name", "service", "entity", "source", "path", "created_at", "indexed_at").
 		Values(
@@ -33,7 +33,7 @@ func (r *ResourceRepo) Create(ctx context.Context, b *Resource) error {
 	return err
 }
 
-func (r *ResourceRepo) Update(ctx context.Context, id string, b *Resource) error {
+func (r *ResourceRepo) Update(ctx context.Context, id string, b *greysealv1.Resource) error {
 	query, args, err := sq.Update("resources").
 		Set("name", b.Name).
 		Set("service", b.Service).
@@ -61,8 +61,8 @@ func (r *ResourceRepo) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *ResourceRepo) Get(ctx context.Context, id string) (*Resource, error) {
-	resource := &Resource{}
+func (r *ResourceRepo) Get(ctx context.Context, id string) (*greysealv1.Resource, error) {
+	resource := &greysealv1.Resource{}
 	var sourceVal int32
 	var createdAtDt time.Time
 	var indexedAtDt time.Time
@@ -87,14 +87,14 @@ func (r *ResourceRepo) Get(ctx context.Context, id string) (*Resource, error) {
 		fmt.Println("error getting resource", err)
 		return nil, err
 	}
-	resource.Source = Source(sourceVal)
+	resource.Source = greysealv1.Source(sourceVal)
 	resource.CreatedAt = timestamppb.New(createdAtDt)
 	resource.IndexedAt = timestamppb.New(indexedAtDt)
 	return resource, nil
 }
 
-func (r *ResourceRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*Resource, error) {
-	var resources []*Resource
+func (r *ResourceRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*greysealv1.Resource, error) {
+	var resources []*greysealv1.Resource
 
 	rows, err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
@@ -106,9 +106,9 @@ func (r *ResourceRepo) List(ctx context.Context, cursor string, limit uint, filt
 		fmt.Println("error listing resources", err)
 		return nil, err
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 	for rows.Next() {
-		resource := &Resource{}
+		resource := &greysealv1.Resource{}
 		var sourceVal int32
 		var createdAtDt time.Time
 		var indexedAtDt time.Time
@@ -126,7 +126,7 @@ func (r *ResourceRepo) List(ctx context.Context, cursor string, limit uint, filt
 			fmt.Println("error scanning resource", err)
 			return nil, err
 		}
-		resource.Source = Source(sourceVal)
+		resource.Source = greysealv1.Source(sourceVal)
 		resource.CreatedAt = timestamppb.New(createdAtDt)
 		resource.IndexedAt = timestamppb.New(indexedAtDt)
 		resources = append(resources, resource)

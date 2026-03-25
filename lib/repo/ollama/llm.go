@@ -86,7 +86,7 @@ func (l *LLM) Chat(ctx context.Context, messages []conversation.LLMMessage, stre
 	if err != nil {
 		return "", fmt.Errorf("ollama chat request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("ollama chat returned status %d", resp.StatusCode)

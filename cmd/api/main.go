@@ -65,7 +65,7 @@ func main() {
 	mux.Handle(convPath, withCORS(convHandler))
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "ok")
+		fmt.Fprintln(w, "ok") //nolint:errcheck
 	})
 
 	errs := make(chan error, 2)
