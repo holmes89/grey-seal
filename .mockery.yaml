@@ -1,5 +1,6 @@
-version: "2"
-with-expecter: true
+quiet: false
+disable-version-string: false
+with-expecter: false
 packages:
   github.com/holmes89/grey-seal/lib/greyseal/conversation:
     config:
@@ -13,3 +14,12 @@ packages:
       outpkg: "mocks"
       mockname: "Mock{{.InterfaceName}}"
       filename: "mock_{{.InterfaceName | lower}}.go"
+  github.com/holmes89/grey-seal/lib/ui/api:
+    config:
+      all: false
+      dir: "lib/ui/pages/mocks"
+      outpkg: "mocks"
+      filename: "mock_{{.InterfaceName | lower | camelcase}}.go"
+    interfaces:
+      ConversationService:
+      RoleService:

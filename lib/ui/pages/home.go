@@ -1,10 +1,8 @@
-//go:build ignore
-
 package pages
 
 import (
 	"github.com/holmes89/grey-seal/lib/ui/components"
-	"github.com/maxence-charriere/go-app/v9/pkg/app"
+	"github.com/maxence-charriere/go-app/v10/pkg/app"
 )
 
 // HomePage is the default home page

@@ -10,6 +10,7 @@ require (
 	github.com/holmes89/archaea v0.0.0-20260211021328-4316130ae253
 	github.com/holmes89/shrike v0.0.0-20260317173518-3935130141bf
 	github.com/lib/pq v1.11.2
+	github.com/maxence-charriere/go-app/v10 v10.1.11
 	github.com/ory/dockertest/v3 v3.12.0
 	github.com/pressly/goose/v3 v3.27.0
 	github.com/rs/cors v1.11.1

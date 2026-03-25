@@ -1,9 +1,7 @@
-//go:build ignore
-
 package components
 
 import (
-	"github.com/maxence-charriere/go-app/v9/pkg/app"
+	"github.com/maxence-charriere/go-app/v10/pkg/app"
 )
 
 // LoadingState handles loading, error, and content display states
@@ -17,8 +15,8 @@ type LoadingState struct {
 func (l *LoadingState) Render() app.UI {
 	return app.Div().
 		Body(
-			app.If(l.Loading,
-				app.Div().Class("loading").Body(
+			app.If(l.Loading, func() app.UI {
+				return app.Div().Class("loading").Body(
 					app.Div().Class("wave-bars").Body(
 						app.Span(),
 						app.Span(),
@@ -26,13 +24,13 @@ func (l *LoadingState) Render() app.UI {
 						app.Span(),
 						app.Span(),
 					),
-				),
-			),
-			app.If(l.Error != "",
-				app.Div().Class("error").Text(l.Error),
-			),
-			app.If(!l.Loading && l.Error == "",
-				l.Content,
-			),
+				)
+			}),
+			app.If(l.Error != "", func() app.UI {
+				return app.Div().Class("error").Text(l.Error)
+			}),
+			app.If(!l.Loading && l.Error == "", func() app.UI {
+				return l.Content
+			}),
 		)
 }

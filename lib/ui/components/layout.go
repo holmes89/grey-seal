@@ -1,9 +1,7 @@
-//go:build ignore
-
 package components
 
 import (
-	"github.com/maxence-charriere/go-app/v9/pkg/app"
+	"github.com/maxence-charriere/go-app/v10/pkg/app"
 )
 
 // PageLayout provides the standard page structure with header, sidebar, and main content area

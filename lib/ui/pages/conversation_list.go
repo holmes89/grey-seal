@@ -1,5 +1,3 @@
-//go:build ignore
-
 package pages
 
 import (
@@ -8,17 +6,15 @@ import (
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/holmes89/grey-seal/lib/ui/api"
 	"github.com/holmes89/grey-seal/lib/ui/components"
-	"github.com/maxence-charriere/go-app/v9/pkg/app"
+	"github.com/maxence-charriere/go-app/v10/pkg/app"
 )
 
-// Navigation functions for ConversationListComponent
 type ConversationListNavigation struct {
 	ConversationDetailURL func(uuid string) string
 	ConversationUpdateURL func(uuid string) string
 	ConversationCreateURL func() string
 }
 
-// DefaultConversationListNavigation returns the default navigation URLs
 func DefaultConversationListNavigation() ConversationListNavigation {
 	return ConversationListNavigation{
 		ConversationDetailURL: func(uuid string) string { return "/conversations/" + uuid },
@@ -36,40 +32,45 @@ func (p *ConversationListPage) Render() app.UI {
 	if p.ConversationListComponent.Navigation.ConversationDetailURL == nil {
 		p.ConversationListComponent.Navigation = DefaultConversationListNavigation()
 	}
-	return &components.PageLayout{
-		Content: &p.ConversationListComponent,
-	}
+	return &components.PageLayout{Content: &p.ConversationListComponent}
 }
 
 type ConversationListComponent struct {
 	app.Compo
 
-	items      []*greysealv1.Conversation
-	loading    bool
-	error      string
-	Navigation ConversationListNavigation
+	ConversationSvc api.ConversationService
+	items           []*greysealv1.Conversation
+	loading         bool
+	error           string
+	Navigation      ConversationListNavigation
+}
+
+func (p *ConversationListComponent) loadData(ctx context.Context) ([]*greysealv1.Conversation, error) {
+	resp, err := p.ConversationSvc.ListConversations(ctx, int32(10))
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
 }
 
 func (p *ConversationListComponent) OnMount(ctx app.Context) {
 	p.loading = true
-	p.Update()
-
 	go func() {
-		resp, err := api.ListConversations(context.Background(), 10)
+		items, err := p.loadData(context.Background())
 		ctx.Dispatch(func(ctx app.Context) {
 			p.loading = false
 			if err != nil {
 				p.error = err.Error()
 			} else {
-				p.items = resp.Data
+				p.items = items
 			}
-			p.Update()
+			ctx.Update()
 		})
 	}()
 }
 
 func (p *ConversationListComponent) Render() app.UI {
-	content := &components.LoadingState{
+	return &components.LoadingState{
 		Loading: p.loading,
 		Error:   p.error,
 		Content: app.Div().
@@ -79,7 +80,7 @@ func (p *ConversationListComponent) Render() app.UI {
 					Body(
 						app.THead().Body(
 							app.Tr().Body(
-								app.Th().Text("Name"),
+								app.Th().Text("Title"),
 								app.Th().Text("Actions"),
 							),
 						),
@@ -90,7 +91,7 @@ func (p *ConversationListComponent) Render() app.UI {
 									app.Td().Body(
 										app.A().
 											Href(p.Navigation.ConversationDetailURL(item.Uuid)).
-											Text(item.ConversationUuid),
+											Text(item.Title),
 									),
 									app.Td().Body(
 										&components.ButtonLink{
@@ -98,36 +99,33 @@ func (p *ConversationListComponent) Render() app.UI {
 											Text:    "Edit",
 											Variant: "outline",
 										},
-									app.Button().
-										Class("button outline danger").
-										OnClick(func(ctx app.Context, e app.Event) {
-											p.deleteItem(ctx, item.Uuid)
-										}).
-										Text("Delete"),
-								),
-							)
-						}),
+										app.Button().
+											Class("button outline danger").
+											OnClick(func(ctx app.Context, e app.Event) {
+												p.deleteItem(ctx, item.Uuid)
+											}).
+											Text("Delete"),
+									),
+								)
+							}),
+						),
 					),
-				),
-			app.Div().
-				Body(
+				app.Div().Body(
 					&components.ButtonLink{
 						Href: p.Navigation.ConversationCreateURL(),
 						Text: "Create Conversation",
 					},
 				),
-		),
-}
-
-return content
+			),
+	}
 }
 
 func (p *ConversationListComponent) deleteItem(ctx app.Context, uuid string) {
 	go func() {
-		if err := api.DeleteConversation(context.Background(), uuid); err != nil {
+		if err := p.ConversationSvc.DeleteConversation(context.Background(), uuid); err != nil {
 			ctx.Dispatch(func(ctx app.Context) {
 				p.error = err.Error()
-				p.Update()
+				ctx.Update()
 			})
 			return
 		}
@@ -138,7 +136,7 @@ func (p *ConversationListComponent) deleteItem(ctx app.Context, uuid string) {
 					break
 				}
 			}
-			p.Update()
+			ctx.Update()
 		})
 	}()
 }

@@ -1,26 +1,21 @@
-//go:build ignore
-
 package pages
 
 import (
 	"context"
-	"fmt"
-	"time"
 	"strings"
+	"time"
 
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/holmes89/grey-seal/lib/ui/api"
 	"github.com/holmes89/grey-seal/lib/ui/components"
-	"github.com/maxence-charriere/go-app/v9/pkg/app"
+	"github.com/maxence-charriere/go-app/v10/pkg/app"
 )
 
-// Navigation functions for ConversationGetComponent
 type ConversationGetNavigation struct {
 	ConversationUpdateURL func(uuid string) string
 	ConversationListURL   func() string
 }
 
-// DefaultConversationGetNavigation returns the default navigation URLs
 func DefaultConversationGetNavigation() ConversationGetNavigation {
 	return ConversationGetNavigation{
 		ConversationUpdateURL: func(uuid string) string { return "/conversations/" + uuid + "/update" },
@@ -33,7 +28,6 @@ type ConversationGetPage struct {
 	ConversationGetComponent
 }
 
-// NewConversationGetPage creates a new ConversationGetPage with pre-set ID.
 func NewConversationGetPage(id string) *ConversationGetPage {
 	p := &ConversationGetPage{}
 	p.ConversationGetComponent.id = id
@@ -41,13 +35,11 @@ func NewConversationGetPage(id string) *ConversationGetPage {
 	return p
 }
 
-// SetID allows external code to inject the ID.
 func (p *ConversationGetPage) SetID(id string) {
 	p.ConversationGetComponent.id = id
 	p.ConversationGetComponent.idsInitialized = true
 }
 
-// SetIDExtractor allows library users to provide their own function for extracting IDs.
 func (p *ConversationGetPage) SetIDExtractor(fn IDExtractor) {
 	p.ConversationGetComponent.IDExtractor = fn
 }
@@ -56,21 +48,28 @@ func (p *ConversationGetPage) Render() app.UI {
 	if p.ConversationGetComponent.Navigation.ConversationUpdateURL == nil {
 		p.ConversationGetComponent.Navigation = DefaultConversationGetNavigation()
 	}
-	return &components.PageLayout{
-		Content: &p.ConversationGetComponent,
-	}
+	return &components.PageLayout{Content: &p.ConversationGetComponent}
 }
 
 type ConversationGetComponent struct {
 	app.Compo
 
-	id             string
-	item           *greysealv1.Conversation
-	loading        bool
-	error          string
-	idsInitialized bool
-	IDExtractor    IDExtractor
-	Navigation     ConversationGetNavigation
+	ConversationSvc api.ConversationService
+	id              string
+	item            *greysealv1.Conversation
+	loading         bool
+	error           string
+	idsInitialized  bool
+	IDExtractor     IDExtractor
+	Navigation      ConversationGetNavigation
+}
+
+func (p *ConversationGetComponent) loadData(ctx context.Context, id string) (*greysealv1.Conversation, error) {
+	resp, err := p.ConversationSvc.GetConversation(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
 }
 
 func (p *ConversationGetComponent) OnMount(ctx app.Context) {
@@ -82,11 +81,9 @@ func (p *ConversationGetComponent) OnNav(ctx app.Context) {
 }
 
 func (p *ConversationGetComponent) loadItem(ctx app.Context) {
-	// Reset state
 	p.item = nil
 	p.error = ""
 
-	// Only extract from URL if IDs weren't set programmatically
 	if !p.idsInitialized {
 		path := ctx.Page().URL().Path
 		if p.IDExtractor != nil {
@@ -98,23 +95,21 @@ func (p *ConversationGetComponent) loadItem(ctx app.Context) {
 
 	if p.id == "" {
 		p.error = "Invalid ID"
-		p.Update()
+		ctx.Update()
 		return
 	}
 
 	p.loading = true
-	p.Update()
-
 	go func() {
-		resp, err := api.GetConversation(context.Background(), p.id)
+		item, err := p.loadData(context.Background(), p.id)
 		ctx.Dispatch(func(ctx app.Context) {
 			p.loading = false
 			if err != nil {
 				p.error = err.Error()
 			} else {
-				p.item = resp.Data
+				p.item = item
 			}
-			p.Update()
+			ctx.Update()
 		})
 	}()
 }
@@ -123,39 +118,29 @@ func (p *ConversationGetComponent) renderDetails() app.UI {
 	if p.item == nil {
 		return app.Div()
 	}
-
 	return app.Div().
 		Body(
-			app.Header().
-				Body(
-					app.H2().Text(p.item.ConversationUuid),
-					app.P().Text("ConversationUuid: " + p.item.ConversationUuid),
-					app.P().Text("Role: " + p.item.Role),
-					app.P().Text("Content: " + p.item.Content),
-					app.P().Text("ResourceUuids: " + strings.Join(p.item.ResourceUuids, ", ")),
-					app.P().Text("Feedback: " + fmt.Sprint(p.item.Feedback)),
-					app.P().Text("CreatedAt: " + p.item.CreatedAt.AsTime().Format(time.RFC3339)),
-				),
-			app.Div().
-				Body(
-					&components.ButtonLink{
-						Href: p.Navigation.ConversationUpdateURL(p.id),
-						Text: "Edit Conversation",
-					},
-					app.Button().
-						Class("button outline danger").
-						OnClick(p.onDelete).
-						Text("Delete Conversation"),
-				),
+			app.Header().Body(
+				app.H2().Text(p.item.Title),
+				app.P().Text("Title: "+p.item.Title),
+				app.P().Text("RoleUuid: "+p.item.RoleUuid),
+				app.P().Text("ResourceUuids: "+strings.Join(p.item.ResourceUuids, ", ")),
+				app.P().Text("Summary: "+p.item.Summary),
+				app.P().Text("CreatedAt: "+p.item.CreatedAt.AsTime().Format(time.RFC3339)),
+			),
+			app.Div().Body(
+				&components.ButtonLink{Href: p.Navigation.ConversationUpdateURL(p.id), Text: "Edit Conversation"},
+				app.Button().Class("button outline danger").OnClick(p.onDelete).Text("Delete Conversation"),
+			),
 		)
 }
 
 func (p *ConversationGetComponent) onDelete(ctx app.Context, e app.Event) {
 	go func() {
-		if err := api.DeleteConversation(context.Background(), p.id); err != nil {
+		if err := p.ConversationSvc.DeleteConversation(context.Background(), p.id); err != nil {
 			ctx.Dispatch(func(ctx app.Context) {
 				p.error = err.Error()
-				p.Update()
+				ctx.Update()
 			})
 			return
 		}
@@ -168,17 +153,12 @@ func (p *ConversationGetComponent) onDelete(ctx app.Context, e app.Event) {
 }
 
 func (p *ConversationGetComponent) Render() app.UI {
-	content := &components.LoadingState{
+	return &components.LoadingState{
 		Loading: p.loading,
 		Error:   p.error,
-		Content: app.Div().
-			Body(
-				app.H1().Text("Conversation Details"),
-				app.If(p.item != nil,
-					p.renderDetails(),
-				),
-			),
+		Content: app.Div().Body(
+			app.H1().Text("Conversation Details"),
+			app.If(p.item != nil, func() app.UI { return p.renderDetails() }),
+		),
 	}
-
-	return content
 }
