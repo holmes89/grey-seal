@@ -9,13 +9,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	dockertestlib "github.com/ory/dockertest/v3"
 	docker "github.com/ory/dockertest/v3/docker"
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+const (
+	convUUID1 = "00000000-0000-0000-0000-000000000001"
+	convUUID2 = "00000000-0000-0000-0000-000000000002"
+	convUUID3 = "00000000-0000-0000-0000-000000000003"
+	convUUID4 = "00000000-0000-0000-0000-000000000004"
+	roleUUID1 = "00000000-0000-0000-0000-000000000011"
+	roleUUID2 = "00000000-0000-0000-0000-000000000012"
+	roleUUID3 = "00000000-0000-0000-0000-000000000013"
 )
 
 var integrationDSN string
@@ -86,7 +95,7 @@ func (s *ConversationRepoTestSuite) TearDownTest() {
 
 func (s *ConversationRepoTestSuite) TestCreateAndGet() {
 	c := &v1.Conversation{
-		Uuid:      uuid.New().String(),
+		Uuid:      convUUID1,
 		Title:     "Integration Test Chat",
 		CreatedAt: timestamppb.New(time.Now()),
 		UpdatedAt: timestamppb.New(time.Now()),
@@ -101,7 +110,7 @@ func (s *ConversationRepoTestSuite) TestCreateAndGet() {
 
 func (s *ConversationRepoTestSuite) TestUpdate() {
 	c := &v1.Conversation{
-		Uuid:      uuid.New().String(),
+		Uuid:      convUUID2,
 		Title:     "Before Update",
 		CreatedAt: timestamppb.New(time.Now()),
 		UpdatedAt: timestamppb.New(time.Now()),
@@ -118,7 +127,7 @@ func (s *ConversationRepoTestSuite) TestUpdate() {
 
 func (s *ConversationRepoTestSuite) TestDelete() {
 	c := &v1.Conversation{
-		Uuid:      uuid.New().String(),
+		Uuid:      convUUID3,
 		Title:     "To Delete",
 		CreatedAt: timestamppb.New(time.Now()),
 		UpdatedAt: timestamppb.New(time.Now()),
@@ -131,9 +140,10 @@ func (s *ConversationRepoTestSuite) TestDelete() {
 }
 
 func (s *ConversationRepoTestSuite) TestList() {
+	listUUIDs := [3]string{convUUID1, convUUID2, convUUID3}
 	for i := 0; i < 3; i++ {
 		c := &v1.Conversation{
-			Uuid:      uuid.New().String(),
+			Uuid:      listUUIDs[i],
 			Title:     fmt.Sprintf("Chat %d", i),
 			CreatedAt: timestamppb.New(time.Now()),
 			UpdatedAt: timestamppb.New(time.Now()),
@@ -172,7 +182,7 @@ func (s *RoleRepoTestSuite) TearDownTest() {
 
 func (s *RoleRepoTestSuite) TestCreateAndGet() {
 	r := &v1.Role{
-		Uuid:         uuid.New().String(),
+		Uuid:         roleUUID1,
 		Name:         "Test Role",
 		SystemPrompt: "You are helpful.",
 		CreatedAt:    timestamppb.New(time.Now()),
@@ -187,7 +197,7 @@ func (s *RoleRepoTestSuite) TestCreateAndGet() {
 
 func (s *RoleRepoTestSuite) TestUpdate() {
 	r := &v1.Role{
-		Uuid:         uuid.New().String(),
+		Uuid:         roleUUID2,
 		Name:         "Before",
 		SystemPrompt: "Prompt",
 		CreatedAt:    timestamppb.New(time.Now()),
@@ -204,7 +214,7 @@ func (s *RoleRepoTestSuite) TestUpdate() {
 
 func (s *RoleRepoTestSuite) TestDelete() {
 	r := &v1.Role{
-		Uuid:      uuid.New().String(),
+		Uuid:      roleUUID3,
 		Name:      "To Delete",
 		CreatedAt: timestamppb.New(time.Now()),
 	}
