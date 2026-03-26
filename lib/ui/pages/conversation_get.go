@@ -30,23 +30,23 @@ type ConversationGetPage struct {
 
 func NewConversationGetPage(id string) *ConversationGetPage {
 	p := &ConversationGetPage{}
-	p.ConversationGetComponent.id = id
-	p.ConversationGetComponent.idsInitialized = true
+	p.id = id
+	p.idsInitialized = true
 	return p
 }
 
 func (p *ConversationGetPage) SetID(id string) {
-	p.ConversationGetComponent.id = id
-	p.ConversationGetComponent.idsInitialized = true
+	p.id = id
+	p.idsInitialized = true
 }
 
 func (p *ConversationGetPage) SetIDExtractor(fn IDExtractor) {
-	p.ConversationGetComponent.IDExtractor = fn
+	p.IDExtractor = fn
 }
 
 func (p *ConversationGetPage) Render() app.UI {
-	if p.ConversationGetComponent.Navigation.ConversationUpdateURL == nil {
-		p.ConversationGetComponent.Navigation = DefaultConversationGetNavigation()
+	if p.Navigation.ConversationUpdateURL == nil {
+		p.Navigation = DefaultConversationGetNavigation()
 	}
 	return &components.PageLayout{Content: &p.ConversationGetComponent}
 }

@@ -29,8 +29,8 @@ type RoleListPage struct {
 }
 
 func (p *RoleListPage) Render() app.UI {
-	if p.RoleListComponent.Navigation.RoleDetailURL == nil {
-		p.RoleListComponent.Navigation = DefaultRoleListNavigation()
+	if p.Navigation.RoleDetailURL == nil {
+		p.Navigation = DefaultRoleListNavigation()
 	}
 	return &components.PageLayout{Content: &p.RoleListComponent}
 }

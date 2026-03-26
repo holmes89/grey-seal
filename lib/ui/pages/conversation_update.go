@@ -29,23 +29,23 @@ type ConversationUpdatePage struct {
 
 func NewConversationUpdatePage(id string) *ConversationUpdatePage {
 	p := &ConversationUpdatePage{}
-	p.ConversationUpdateComponent.id = id
-	p.ConversationUpdateComponent.idsInitialized = true
+	p.id = id
+	p.idsInitialized = true
 	return p
 }
 
 func (p *ConversationUpdatePage) SetID(id string) {
-	p.ConversationUpdateComponent.id = id
-	p.ConversationUpdateComponent.idsInitialized = true
+	p.id = id
+	p.idsInitialized = true
 }
 
 func (p *ConversationUpdatePage) SetIDExtractor(fn IDExtractor) {
-	p.ConversationUpdateComponent.IDExtractor = fn
+	p.IDExtractor = fn
 }
 
 func (p *ConversationUpdatePage) Render() app.UI {
-	if p.ConversationUpdateComponent.Navigation.OnSuccess == nil {
-		p.ConversationUpdateComponent.Navigation = DefaultConversationUpdateNavigation()
+	if p.Navigation.OnSuccess == nil {
+		p.Navigation = DefaultConversationUpdateNavigation()
 	}
 	return &components.PageLayout{Content: &p.ConversationUpdateComponent}
 }

@@ -28,23 +28,23 @@ type RoleUpdatePage struct {
 
 func NewRoleUpdatePage(id string) *RoleUpdatePage {
 	p := &RoleUpdatePage{}
-	p.RoleUpdateComponent.id = id
-	p.RoleUpdateComponent.idsInitialized = true
+	p.id = id
+	p.idsInitialized = true
 	return p
 }
 
 func (p *RoleUpdatePage) SetID(id string) {
-	p.RoleUpdateComponent.id = id
-	p.RoleUpdateComponent.idsInitialized = true
+	p.id = id
+	p.idsInitialized = true
 }
 
 func (p *RoleUpdatePage) SetIDExtractor(fn IDExtractor) {
-	p.RoleUpdateComponent.IDExtractor = fn
+	p.IDExtractor = fn
 }
 
 func (p *RoleUpdatePage) Render() app.UI {
-	if p.RoleUpdateComponent.Navigation.OnSuccess == nil {
-		p.RoleUpdateComponent.Navigation = DefaultRoleUpdateNavigation()
+	if p.Navigation.OnSuccess == nil {
+		p.Navigation = DefaultRoleUpdateNavigation()
 	}
 	return &components.PageLayout{Content: &p.RoleUpdateComponent}
 }

@@ -26,8 +26,8 @@ type ConversationCreatePage struct {
 }
 
 func (p *ConversationCreatePage) Render() app.UI {
-	if p.ConversationCreateComponent.Navigation.OnSuccess == nil {
-		p.ConversationCreateComponent.Navigation = DefaultConversationCreateNavigation()
+	if p.Navigation.OnSuccess == nil {
+		p.Navigation = DefaultConversationCreateNavigation()
 	}
 	return &components.PageLayout{Content: &p.ConversationCreateComponent}
 }

@@ -115,4 +115,3 @@ func (r *RoleRepo) List(ctx context.Context, cursor string, limit uint, filter m
 	}
 	return roles, nil
 }
-

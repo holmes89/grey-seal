@@ -29,8 +29,8 @@ type ConversationListPage struct {
 }
 
 func (p *ConversationListPage) Render() app.UI {
-	if p.ConversationListComponent.Navigation.ConversationDetailURL == nil {
-		p.ConversationListComponent.Navigation = DefaultConversationListNavigation()
+	if p.Navigation.ConversationDetailURL == nil {
+		p.Navigation = DefaultConversationListNavigation()
 	}
 	return &components.PageLayout{Content: &p.ConversationListComponent}
 }

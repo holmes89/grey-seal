@@ -29,23 +29,23 @@ type RoleGetPage struct {
 
 func NewRoleGetPage(id string) *RoleGetPage {
 	p := &RoleGetPage{}
-	p.RoleGetComponent.id = id
-	p.RoleGetComponent.idsInitialized = true
+	p.id = id
+	p.idsInitialized = true
 	return p
 }
 
 func (p *RoleGetPage) SetID(id string) {
-	p.RoleGetComponent.id = id
-	p.RoleGetComponent.idsInitialized = true
+	p.id = id
+	p.idsInitialized = true
 }
 
 func (p *RoleGetPage) SetIDExtractor(fn IDExtractor) {
-	p.RoleGetComponent.IDExtractor = fn
+	p.IDExtractor = fn
 }
 
 func (p *RoleGetPage) Render() app.UI {
-	if p.RoleGetComponent.Navigation.RoleUpdateURL == nil {
-		p.RoleGetComponent.Navigation = DefaultRoleGetNavigation()
+	if p.Navigation.RoleUpdateURL == nil {
+		p.Navigation = DefaultRoleGetNavigation()
 	}
 	return &components.PageLayout{Content: &p.RoleGetComponent}
 }

@@ -27,8 +27,8 @@ type RoleCreatePage struct {
 }
 
 func (p *RoleCreatePage) Render() app.UI {
-	if p.RoleCreateComponent.Navigation.OnSuccess == nil {
-		p.RoleCreateComponent.Navigation = DefaultRoleCreateNavigation()
+	if p.Navigation.OnSuccess == nil {
+		p.Navigation = DefaultRoleCreateNavigation()
 	}
 	return &components.PageLayout{Content: &p.RoleCreateComponent}
 }
