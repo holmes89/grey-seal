@@ -42,6 +42,7 @@ func (r *ResourceRepo) Update(ctx context.Context, id string, b *greysealv1.Reso
 		Set("path", b.Path).
 		Set("indexed_at", b.IndexedAt.AsTime()).
 		Where(sq.Eq{"uuid": id}).
+		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
 		return err
@@ -53,6 +54,7 @@ func (r *ResourceRepo) Update(ctx context.Context, id string, b *greysealv1.Reso
 func (r *ResourceRepo) Delete(ctx context.Context, id string) error {
 	query, args, err := sq.Delete("resources").
 		Where(sq.Eq{"uuid": id}).
+		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
 		return err

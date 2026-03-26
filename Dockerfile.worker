@@ -1,4 +1,4 @@
-FROM golang:1.25 AS deps
+FROM golang:1.26 AS deps
 
 WORKDIR /grey-seal
 

@@ -65,3 +65,17 @@ type Searcher interface {
 type RoleRepository interface {
 	Get(ctx context.Context, id string) (*greysealv1.Role, error)
 }
+
+// CachedResource is a resource snippet stored in the cache for a conversation.
+type CachedResource struct {
+	EntityUUID string
+	Title      string
+	Snippet    string
+	Score      float32
+}
+
+// ResourceCache persists per-conversation resource context between requests.
+type ResourceCache interface {
+	Merge(ctx context.Context, conversationUUID string, resources []CachedResource) error
+	List(ctx context.Context, conversationUUID string) ([]CachedResource, error)
+}

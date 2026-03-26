@@ -38,6 +38,7 @@ func (r *RoleRepo) Update(ctx context.Context, id string, b *greysealv1.Role) er
 		Set("name", b.Name).
 		Set("system_prompt", b.SystemPrompt).
 		Where(sq.Eq{"uuid": id}).
+		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
 		return err
@@ -49,6 +50,7 @@ func (r *RoleRepo) Update(ctx context.Context, id string, b *greysealv1.Role) er
 func (r *RoleRepo) Delete(ctx context.Context, id string) error {
 	query, args, err := sq.Delete("roles").
 		Where(sq.Eq{"uuid": id}).
+		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
 		return err

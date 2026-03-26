@@ -49,6 +49,7 @@ func (r *MessageRepo) Update(ctx context.Context, id string, b *greysealv1.Messa
 		Set("resource_uuids", pq.Array(resourceUUIDs)).
 		Set("feedback", b.Feedback).
 		Where(sq.Eq{"uuid": id}).
+		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
 		return err
@@ -60,6 +61,7 @@ func (r *MessageRepo) Update(ctx context.Context, id string, b *greysealv1.Messa
 func (r *MessageRepo) Delete(ctx context.Context, id string) error {
 	query, args, err := sq.Delete("messages").
 		Where(sq.Eq{"uuid": id}).
+		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
 		return err
@@ -218,6 +220,7 @@ func (r *ConversationRepo) Update(ctx context.Context, id string, b *greysealv1.
 func (r *ConversationRepo) Delete(ctx context.Context, id string) error {
 	query, args, err := sq.Delete("conversations").
 		Where(sq.Eq{"uuid": id}).
+		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
 		return err
