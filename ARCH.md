@@ -2,35 +2,48 @@
 
 ## Overview
 
-grey-seal is a single-binary Go service (`cmd/api`) that exposes a Connect-RPC API over HTTP/2 (h2c). It uses a layered architecture: a thin gRPC/Connect handler layer delegates to domain service interfaces, which are backed by PostgreSQL repositories. LLM inference is delegated to a local Ollama instance; semantic search is delegated to the external **shrike** service.
+grey-seal is a single-binary Go service (`cmd/api`) that exposes a Connect-RPC API over HTTP/2 (h2c). It uses a layered architecture: a thin gRPC/Connect handler layer delegates to domain service interfaces, which are backed by PostgreSQL repositories. LLM inference is delegated to a local Ollama instance; semantic search is delegated to the external **shrike** service. Resources are ingested asynchronously via **Redpanda/Kafka**: the API enqueues events that the **worker** process consumes to fetch content and forward it to shrike for chunking, embedding, and vector indexing.
 
 ```
-┌──────────────────────────────────────────────────────┐
-│  Clients (CLI, browser UI, other services)           │
-│  Connect-RPC over HTTP/2 (grpc-web compatible)       │
-└────────────────────┬─────────────────────────────────┘
-                     │ :9000
-┌────────────────────▼─────────────────────────────────┐
-│  cmd/api/main.go  –  http.ServeMux                   │
-│  CORS middleware wraps each route                    │
-│  /health  (plaintext liveness probe)                 │
-├──────────────────────────────────────────────────────┤
-│  Connect-RPC Handlers (lib/greyseal/*/grpc/)         │
-│  ┌─────────────────┐  ┌──────────────────────────┐   │
-│  │  RoleHandler    │  │  ConversationHandler     │   │
-│  │  (CRUD)         │  │  (CRUD + Chat stream +   │   │
-│  │                 │  │   SubmitFeedback)        │   │
-│  └────────┬────────┘  └────────────┬─────────────┘   │
-│           │                        │                  │
-│  ┌────────▼────────┐  ┌────────────▼─────────────┐   │
-│  │  RoleService    │  │  ConversationService     │   │
-│  │  (interface)    │  │  (interface)             │   │
-│  └────────┬────────┘  └─┬────────┬───────┬───────┘   │
-│           │             │        │       │            │
-│      RoleRepo     ConvRepo  MessageRepo Searcher LLM  │
-└──────┬────┴─────────┬────┴────┬───┴───────┴──────┴───┘
-       │              │         │          │        │
-   PostgreSQL      PostgreSQL  PostgreSQL  shrike  Ollama
+┌──────────────────────────────────────────────────────────────────┐
+│  Clients (CLI, browser UI, other services)                       │
+│  Connect-RPC over HTTP/2 (grpc-web compatible)                   │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │ :9000
+┌───────────────────────────▼──────────────────────────────────────┐
+│  cmd/api/main.go  –  http.ServeMux                               │
+│  CORS middleware wraps each route                                │
+│  /health  (plaintext liveness probe)                             │
+├──────────────────────────────────────────────────────────────────┤
+│  Connect-RPC Handlers (lib/greyseal/*/grpc/)                     │
+│  ┌──────────────┐  ┌─────────────────────────┐  ┌─────────────┐ │
+│  │ RoleHandler  │  │  ConversationHandler    │  │ResourceHdlr │ │
+│  │  (CRUD)      │  │  (CRUD + Chat + Feedbk) │  │  (CRUD)     │ │
+│  └──────┬───────┘  └────────────┬────────────┘  └──────┬──────┘ │
+│         │                       │                       │        │
+│  ┌──────▼───────┐  ┌────────────▼────────────┐  ┌──────▼──────┐ │
+│  │ RoleService  │  │  ConversationService    │  │ResourceSvc  │ │
+│  └──────┬───────┘  └─┬────┬────┬──────┬─────┘  └──────┬──────┘ │
+│         │           │    │    │      │                 │        │
+│      RoleRepo   ConvRepo Msg  Searcher Cache        ResourceRepo│
+│                        Repo    LLM                    Indexer   │
+└─────────┬───────────────┴────┴────────┴──────┬──────────┬───────┘
+          │                                     │          │
+       PostgreSQL                            shrike     Kafka
+                                            Ollama     (Redpanda)
+```
+
+```
+Async ingestion pipeline
+────────────────────────
+API: ResourceService.Ingest
+  │  SOURCE_TEXT   → Kafka: shrikev1.TextExtractedEvent  ──► shrike consumer
+  │  SOURCE_WEBSITE/PDF → Kafka: greysealv1.Resource ──► worker
+  └──────────────────────────────────────────────────────────────────────────
+Worker: kafka.Consumer[*greysealv1.Resource]
+  └─ FetchContent (HTTP scrape / PDF)
+       └─ Kafka: shrikev1.TextExtractedEvent  ──► shrike consumer
+                                                    (chunk → embed → Qdrant)
 ```
 
 ## Process Inventory
@@ -38,7 +51,7 @@ grey-seal is a single-binary Go service (`cmd/api`) that exposes a Connect-RPC A
 | Process | Source | Port | Notes |
 |---|---|---|---|
 | API server | `cmd/api/main.go` | 9000 | Active, ships in `Dockerfile` |
-| Worker | `cmd/worker/main.go` | — | Skeleton only; reads `DATABASE_URL`, waits for signal |
+| Worker | `cmd/worker/main.go` | — | Kafka consumer; fetches web/PDF content and forwards to shrike |
 | UI | `cmd/ui/main.go` | 8000 | `//go:build ignore`; excluded from normal builds |
 
 ## Transport
@@ -51,25 +64,41 @@ The API server uses `h2c` (cleartext HTTP/2) via `golang.org/x/net/http2/h2c`, m
 
 Thin CRUD service around the `roles` table. No business logic beyond delegation to the repository. Exposes `List`, `Get`, `Create`, `Update`, `Delete`.
 
+### Resource service (`lib/greyseal/resource/`)
+
+Manages resource metadata (title, URL, source type, timestamps). Exposes `List`, `Get`, `Ingest`, `Delete`.
+
+`Ingest` assigns a UUID and `created_at`, persists the record, then triggers async indexing via the `Indexer` interface. When `KAFKA_BROKERS` is set the real `KafkaIndexer` is wired; otherwise the indexer is `nil` and indexing is skipped (graceful degradation).
+
+`KafkaIndexer` publishes:
+- `SOURCE_TEXT` → `shrikev1.TextExtractedEvent` (topic `v1.TextExtractedEvent`) directly to shrike's consumer
+- `SOURCE_WEBSITE` / `SOURCE_PDF` → `greysealv1.Resource` (topic `v1.Resource`) to the worker queue
+
 ### Conversation service (`lib/greyseal/conversation/`)
 
-The core domain service. Handles both CRUD on conversations and the `Chat` method, which orchestrates:
+The core RAG orchestration service. Handles CRUD on conversations and the `Chat` method, which:
 
-1. Persist the incoming user `Message` to the database.
-2. Load the `Conversation` record to read `role_uuid` and `resource_uuids`.
+1. Persist the incoming user `Message`.
+2. Load the `Conversation` record (`role_uuid`, `resource_uuids`, `summary`).
 3. If `role_uuid` is set, fetch the `Role` and prepend its `system_prompt` as a system message.
-4. Load the 10 most recent prior messages as conversation history.
-5. Query **shrike** (`Searcher` interface) with the user's message, optionally scoped to the conversation's `resource_uuids`. Inject returned snippets as a second system message.
-6. Append message history and the new user turn.
-7. Call the **LLM** (`LLM` interface) with the assembled message list; stream each token back through the Connect server-stream.
-8. Persist the assistant response.
-9. Update `conversations.updated_at`.
+4. Load prior message history. If history exceeds 10 messages, summarise the overflow via a second LLM call and persist the summary to `conversations.summary`. Prepend the (existing or freshly generated) summary as a system message.
+5. Retrieve relevant context via `contextSearch` (cache-first): check the per-conversation `ResourceCache` first; on a miss, call **shrike** (`Searcher`) with `EntityUuids` filter, then populate the cache. Format snippets as `"N. [Title]: snippet"` for source attribution.
+6. Append message history and the current user turn.
+7. Call the **LLM** (`LLM` interface); stream each token via the Connect server-stream callback.
+8. Persist the assistant response and update `conversations.updated_at`.
 
-The `SubmitFeedback` method writes -1/0/1 to `messages.feedback`.
+`SubmitFeedback` writes -1/0/1 to `messages.feedback`.
 
-### Resource service
+`ResourceCache` (`lib/repo/cache/RedisResourceCache`) stores per-conversation resource snippets in Redis (key `greyseal:conv:{uuid}:resources`, TTL 24 h). Wired when `REDIS_URL` is set; `nil` otherwise (no caching).
 
-The `ResourceService` gRPC handler is wired but its domain service implementation is not present in the codebase. The `ingest` CLI command calls `IngestResource` directly against the Connect endpoint, and `ResourceRepo` provides PostgreSQL persistence of resource metadata.
+## Worker (`cmd/worker/`)
+
+Consumes the `v1.Resource` Kafka topic via `archaea/kafka.Consumer`. For each resource:
+1. Calls `resource.FetchContent` to retrieve the raw text (HTTP scrape for websites; placeholder for PDFs).
+2. Publishes a `shrikev1.TextExtractedEvent` to shrike's Kafka topic for chunking, embedding, and Qdrant indexing.
+3. Updates `resources.indexed_at` in PostgreSQL.
+
+Requires `KAFKA_BROKERS` and `DATABASE_URL` environment variables.
 
 ## Repository Layer (`lib/repo/`)
 
@@ -83,11 +112,7 @@ All repositories embed `*Conn`, which holds a `*sql.DB`. SQL is built with `Mast
 
 ## Search Adapter
 
-`shrikeSearcher` implements `conversation.Searcher` by calling `shrikeconnect.SearchServiceClient.Search` with `mode: "hybrid"`. Results are filtered client-side to the conversation's `resource_uuids` set if non-empty.
-
-## Worker
-
-The worker binary connects to PostgreSQL and then blocks waiting for an OS signal. The compose file also provides it with `KAFKA_BROKERS`, `QDRANT_HOST`, and `OLLAMA_EMBED_MODEL`, suggesting its intended purpose is asynchronous resource ingestion (chunking, embedding, indexing into Qdrant via Redpanda events). This logic is not yet implemented in source.
+`shrikeSearcher` implements `conversation.Searcher` by calling `shrikeconnect.SearchServiceClient.Search` with `mode: "hybrid"` and a `SearchFilter.EntityUuids` field when the conversation is scoped to specific resources. Server-side filtering eliminates the need for a client-side loop.
 
 ## UI (`lib/ui/`, `cmd/ui/`)
 
@@ -103,8 +128,9 @@ The root Cobra command is `grey-seal`. The only active subcommand is `ingest`. T
 |---|---|
 | `connectrpc.com/connect` | Connect-RPC server and client |
 | `connectrpc.com/cors` | CORS headers for Connect |
-| `github.com/holmes89/archaea` | Generic base types (Repository, Service, ListRequest/Response) |
-| `github.com/holmes89/shrike` | External vector search service (client stubs only) |
+| `github.com/holmes89/archaea` | Generic base types + Kafka producer/consumer |
+| `github.com/holmes89/shrike` | External vector search + text extraction service |
+| `github.com/redis/go-redis/v9` | Redis client for resource snippet cache |
 | `github.com/Masterminds/squirrel` | SQL query builder |
 | `github.com/pressly/goose/v3` | Database migrations |
 | `github.com/spf13/cobra` | CLI framework |

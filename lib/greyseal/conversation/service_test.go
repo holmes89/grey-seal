@@ -2,6 +2,7 @@ package conversation_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"go.uber.org/zap"
@@ -29,7 +30,8 @@ func (s *ConversationServiceTestSuite) SetupTest() {
 	s.searcher = mocks.NewMockSearcher(s.T())
 	s.roleRepo = mocks.NewMockRoleRepository(s.T())
 	s.llm = mocks.NewMockLLM(s.T())
-	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, zap.NewNop())
+	// nil cache — tests that need it create their own service instance
+	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, nil, zap.NewNop())
 }
 
 func (s *ConversationServiceTestSuite) TestList() {
@@ -103,7 +105,7 @@ func (s *ConversationServiceTestSuite) TestChat_WithLLM() {
 	// List history (empty)
 	s.msgRepo.On("ListByConversation", mock.Anything, convUUID).Return([]*v1.Message{}, nil)
 
-	// Searcher returns empty
+	// Searcher returns empty (no cache, searcher is called)
 	s.searcher.On("Search", mock.Anything, "hello", int32(5), []string(nil)).Return([]conversation.SearchResult{}, nil)
 
 	// LLM call
@@ -121,6 +123,153 @@ func (s *ConversationServiceTestSuite) TestChat_WithLLM() {
 	s.Require().NoError(err)
 	s.Equal(v1.MessageRole_MESSAGE_ROLE_ASSISTANT, msg.GetRole())
 	s.Equal("world", msg.GetContent())
+}
+
+func (s *ConversationServiceTestSuite) TestChat_SourceAttribution() {
+	convUUID := "conv-attr"
+	conv := &v1.Conversation{Uuid: convUUID}
+
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.convRepo.On("Get", mock.Anything, convUUID).Return(conv, nil)
+	s.msgRepo.On("ListByConversation", mock.Anything, convUUID).Return([]*v1.Message{}, nil)
+
+	// Searcher returns a titled result
+	s.searcher.On("Search", mock.Anything, "query", int32(5), []string(nil)).
+		Return([]conversation.SearchResult{{EntityUUID: "e1", Title: "Go Docs", Snippet: "goroutines are lightweight"}}, nil)
+
+	// Capture the messages sent to the LLM to verify attribution format
+	var capturedMessages []conversation.LLMMessage
+	s.llm.On("Chat", mock.Anything, mock.MatchedBy(func(msgs []conversation.LLMMessage) bool {
+		capturedMessages = msgs
+		return true
+	}), mock.Anything).Return("answer", nil)
+
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT
+	})).Return(nil).Once()
+	s.convRepo.On("Update", mock.Anything, convUUID, mock.Anything).Return(nil)
+
+	_, err := s.svc.Chat(context.Background(), convUUID, "query", func(_ string) error { return nil })
+	s.Require().NoError(err)
+
+	// Find the system context message and verify attribution format
+	var contextMsg string
+	for _, m := range capturedMessages {
+		if m.Role == "system" && strings.Contains(m.Content, "relevant context") {
+			contextMsg = m.Content
+			break
+		}
+	}
+	s.Require().NotEmpty(contextMsg, "expected a context system message")
+	s.Contains(contextMsg, "[Go Docs]: goroutines are lightweight")
+}
+
+func (s *ConversationServiceTestSuite) TestChat_SummaryPrepended() {
+	convUUID := "conv-summary"
+	conv := &v1.Conversation{Uuid: convUUID, Summary: "Earlier we discussed Go channels."}
+
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.convRepo.On("Get", mock.Anything, convUUID).Return(conv, nil)
+	s.msgRepo.On("ListByConversation", mock.Anything, convUUID).Return([]*v1.Message{}, nil)
+	s.searcher.On("Search", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return([]conversation.SearchResult{}, nil)
+
+	var capturedMessages []conversation.LLMMessage
+	s.llm.On("Chat", mock.Anything, mock.MatchedBy(func(msgs []conversation.LLMMessage) bool {
+		capturedMessages = msgs
+		return true
+	}), mock.Anything).Return("ok", nil)
+
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT
+	})).Return(nil).Once()
+	s.convRepo.On("Update", mock.Anything, convUUID, mock.Anything).Return(nil)
+
+	_, err := s.svc.Chat(context.Background(), convUUID, "follow up", func(_ string) error { return nil })
+	s.Require().NoError(err)
+
+	// A system message containing the summary must appear before the user turn
+	var hasSummary bool
+	for _, m := range capturedMessages {
+		if m.Role == "system" && strings.Contains(m.Content, "Earlier we discussed Go channels.") {
+			hasSummary = true
+			break
+		}
+	}
+	s.True(hasSummary, "expected summary to be prepended as a system message")
+}
+
+func (s *ConversationServiceTestSuite) TestChat_CacheHit() {
+	cache := mocks.NewMockResourceCache(s.T())
+	svc := conversation.NewConversationService(
+		s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, cache, zap.NewNop(),
+	)
+
+	convUUID := "conv-cache-hit"
+	conv := &v1.Conversation{Uuid: convUUID}
+
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.convRepo.On("Get", mock.Anything, convUUID).Return(conv, nil)
+	s.msgRepo.On("ListByConversation", mock.Anything, convUUID).Return([]*v1.Message{}, nil)
+
+	// Cache returns a hit — searcher must NOT be called
+	cache.On("List", mock.Anything, convUUID).Return([]conversation.CachedResource{
+		{EntityUUID: "e1", Title: "Redis Docs", Snippet: "redis is fast", Score: 0.9},
+	}, nil)
+
+	s.llm.On("Chat", mock.Anything, mock.Anything, mock.Anything).Return("cached answer", nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT
+	})).Return(nil).Once()
+	s.convRepo.On("Update", mock.Anything, convUUID, mock.Anything).Return(nil)
+
+	msg, err := svc.Chat(context.Background(), convUUID, "what is redis?", func(_ string) error { return nil })
+	s.Require().NoError(err)
+	s.Equal("cached answer", msg.GetContent())
+	// searcher was NOT registered — testify mock will fail if it is called unexpectedly
+}
+
+func (s *ConversationServiceTestSuite) TestChat_CacheMiss() {
+	cache := mocks.NewMockResourceCache(s.T())
+	svc := conversation.NewConversationService(
+		s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, cache, zap.NewNop(),
+	)
+
+	convUUID := "conv-cache-miss"
+	conv := &v1.Conversation{Uuid: convUUID}
+
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.convRepo.On("Get", mock.Anything, convUUID).Return(conv, nil)
+	s.msgRepo.On("ListByConversation", mock.Anything, convUUID).Return([]*v1.Message{}, nil)
+
+	// Cache miss
+	cache.On("List", mock.Anything, convUUID).Return([]conversation.CachedResource(nil), nil)
+
+	// Searcher returns results
+	searchResult := []conversation.SearchResult{{EntityUUID: "e2", Title: "Kafka Docs", Snippet: "partitions scale well", Score: 0.8}}
+	s.searcher.On("Search", mock.Anything, "kafka partitions", int32(5), []string(nil)).Return(searchResult, nil)
+
+	// Cache should be populated with the results
+	cache.On("Merge", mock.Anything, convUUID, mock.MatchedBy(func(rs []conversation.CachedResource) bool {
+		return len(rs) == 1 && rs[0].Title == "Kafka Docs"
+	})).Return(nil)
+
+	s.llm.On("Chat", mock.Anything, mock.Anything, mock.Anything).Return("miss answer", nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT
+	})).Return(nil).Once()
+	s.convRepo.On("Update", mock.Anything, convUUID, mock.Anything).Return(nil)
+
+	_, err := svc.Chat(context.Background(), convUUID, "kafka partitions", func(_ string) error { return nil })
+	s.Require().NoError(err)
 }
 
 func (s *ConversationServiceTestSuite) TestSubmitFeedback() {

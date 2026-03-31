@@ -10,6 +10,7 @@ import (
 
 	"connectrpc.com/connect"
 	connectcors "connectrpc.com/cors"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
@@ -17,9 +18,12 @@ import (
 
 	conversationsvc "github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	conversationgrpc "github.com/holmes89/grey-seal/lib/greyseal/conversation/grpc"
+	resourcesvc "github.com/holmes89/grey-seal/lib/greyseal/resource"
+	resourcegrpc "github.com/holmes89/grey-seal/lib/greyseal/resource/grpc"
 	rolesvc "github.com/holmes89/grey-seal/lib/greyseal/role"
 	rolegrpc "github.com/holmes89/grey-seal/lib/greyseal/role/grpc"
 	"github.com/holmes89/grey-seal/lib/repo"
+	"github.com/holmes89/grey-seal/lib/repo/cache"
 	"github.com/holmes89/grey-seal/lib/repo/ollama"
 	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
 	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1/services"
@@ -55,6 +59,24 @@ func main() {
 	logger.Info("registering role service route", zap.String("path", rolePath))
 	mux.Handle(rolePath, withCORS(roleHandler))
 
+	// Resource service (Kafka indexer is wired only when KAFKA_BROKERS is set)
+	var indexer resourcesvc.Indexer
+	if brokers := os.Getenv("KAFKA_BROKERS"); brokers != "" {
+		indexer = resourcesvc.NewKafkaIndexer(brokers, logger)
+	}
+	resourceRepo := &repo.ResourceRepo{Conn: store}
+	resSvc := resourcesvc.NewResourceService(resourceRepo, indexer, logger)
+	resourcePath, resourceHandler := servicesconnect.NewResourceServiceHandler(resourcegrpc.NewResourceHandler(resSvc))
+	logger.Info("registering resource service route", zap.String("path", resourcePath))
+	mux.Handle(resourcePath, withCORS(resourceHandler))
+
+	// Per-conversation resource cache (optional; requires REDIS_URL)
+	var resourceCache conversationsvc.ResourceCache
+	if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
+		rdb := redis.NewClient(&redis.Options{Addr: redisURL})
+		resourceCache = cache.NewRedisResourceCache(rdb)
+	}
+
 	// Conversation service
 	convRepo := repo.NewConversationRepo(store)
 	messageRepo := &repo.MessageRepo{Conn: store}
@@ -64,6 +86,7 @@ func main() {
 		searcher,
 		roleRepo,
 		ollamaLLM,
+		resourceCache,
 		logger,
 	)
 	convPath, convHandler := servicesconnect.NewConversationServiceHandler(conversationgrpc.NewConversationHandler(convSvc))
@@ -103,30 +126,21 @@ type shrikeSearcher struct {
 }
 
 func (s *shrikeSearcher) Search(ctx context.Context, query string, limit int32, resourceUUIDs []string) ([]conversationsvc.SearchResult, error) {
-	resp, err := s.client.Search(ctx, connect.NewRequest(&shrikev1.SearchRequest{
+	req := &shrikev1.SearchRequest{
 		Query: query,
 		Limit: limit,
 		Mode:  "hybrid",
-	}))
+	}
+	if len(resourceUUIDs) > 0 {
+		req.Filter = &shrikev1.SearchFilter{EntityUuids: resourceUUIDs}
+	}
+	resp, err := s.client.Search(ctx, connect.NewRequest(req))
 	if err != nil {
 		return nil, err
 	}
 
-	// Build lookup set for fast filtering.
-	var uuidSet map[string]bool
-	if len(resourceUUIDs) > 0 {
-		uuidSet = make(map[string]bool, len(resourceUUIDs))
-		for _, id := range resourceUUIDs {
-			uuidSet[id] = true
-		}
-	}
-
 	results := make([]conversationsvc.SearchResult, 0, len(resp.Msg.GetResults()))
 	for _, r := range resp.Msg.GetResults() {
-		// If the conversation scopes to specific resources, skip unrelated results.
-		if uuidSet != nil && !uuidSet[r.GetEntityUuid()] {
-			continue
-		}
 		results = append(results, conversationsvc.SearchResult{
 			EntityUUID: r.GetEntityUuid(),
 			Title:      r.GetTitle(),

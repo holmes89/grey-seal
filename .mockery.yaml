@@ -8,6 +8,12 @@ packages:
       outpkg: "mocks"
       mockname: "Mock{{.InterfaceName}}"
       filename: "mock_{{.InterfaceName | lower}}.go"
+  github.com/holmes89/grey-seal/lib/greyseal/resource:
+    config:
+      dir: "lib/greyseal/resource/mocks"
+      outpkg: "mocks"
+      mockname: "Mock{{.InterfaceName}}"
+      filename: "mock_{{.InterfaceName | lower}}.go"
   github.com/holmes89/grey-seal/lib/greyseal/role:
     config:
       dir: "lib/greyseal/role/mocks"

@@ -33,6 +33,7 @@ type conversationService struct {
 	searcher         Searcher       // optional
 	roleRepo         RoleRepository // optional
 	llm              LLM            // optional
+	cache            ResourceCache  // optional; disables per-conversation snippet caching when nil
 	logger           *zap.Logger
 }
 
@@ -42,6 +43,7 @@ func NewConversationService(
 	searcher Searcher,
 	roleRepo RoleRepository,
 	llm LLM,
+	cache ResourceCache,
 	logger *zap.Logger,
 ) ConversationService {
 	return &conversationService{
@@ -50,6 +52,7 @@ func NewConversationService(
 		searcher:         searcher,
 		roleRepo:         roleRepo,
 		llm:              llm,
+		cache:            cache,
 		logger:           logger,
 	}
 }
@@ -135,7 +138,6 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		return nil, fmt.Errorf("failed to load conversation: %w", err)
 	}
 
-	// Build LLM messages list
 	var llmMessages []LLMMessage
 
 	// 3. Load role system prompt if role_uuid is set
@@ -149,57 +151,67 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		}
 	}
 
-	// 4. Load recent message history (last 10 messages)
+	// 4. Load message history and handle overflow summarisation
 	history, err := srv.messageRepo.ListByConversation(ctx, conversationUUID)
 	if err != nil {
 		history = nil // non-fatal; continue without history
 	}
-	// Take last 10 messages (excluding the one we just saved)
-	if len(history) > 11 {
-		history = history[len(history)-11:]
-	}
-	// Drop the last element (user message we just persisted)
+	// Remove the user message we just persisted (it is always last, sorted ASC).
 	if len(history) > 0 && history[len(history)-1].Uuid == userMsg.Uuid {
 		history = history[:len(history)-1]
 	}
-	if len(history) > 10 {
-		history = history[len(history)-10:]
-	}
 
-	// 5. Search shrike for relevant context (scoped to conversation resources if set)
-	if srv.searcher != nil {
-		results, err := srv.searcher.Search(ctx, content, 5, conv.ResourceUuids)
-		if err == nil && len(results) > 0 {
-			var contextParts []string
-			for i, r := range results {
-				contextParts = append(contextParts, fmt.Sprintf("%d. %s", i+1, r.Snippet))
-			}
-			llmMessages = append(llmMessages, LLMMessage{
-				Role:    "system",
-				Content: "Here is relevant context:\n" + strings.Join(contextParts, "\n"),
+	// If history is deeper than 10 messages, summarise the overflow and persist it.
+	summaryText := conv.Summary
+	if len(history) > 10 {
+		overflow := history[:len(history)-10]
+		history = history[len(history)-10:]
+		if generated := srv.summarizeMessages(ctx, overflow); generated != "" {
+			summaryText = generated
+			_ = srv.conversationRepo.Update(ctx, conversationUUID, &greysealv1.Conversation{
+				Uuid:          conv.Uuid,
+				Title:         conv.Title,
+				RoleUuid:      conv.RoleUuid,
+				ResourceUuids: conv.ResourceUuids,
+				Summary:       generated,
+				UpdatedAt:     timestamppb.New(time.Now()),
 			})
 		}
 	}
 
-	// 8. Add message history
+	// Prepend the summary (existing or freshly generated) as a system message.
+	if summaryText != "" {
+		llmMessages = append(llmMessages, LLMMessage{
+			Role:    "system",
+			Content: "Summary of earlier conversation: " + summaryText,
+		})
+	}
+
+	// 5. Retrieve relevant context from shrike (cache-first).
+	if contextSnippets := srv.contextSearch(ctx, conversationUUID, content, conv.ResourceUuids); len(contextSnippets) > 0 {
+		var parts []string
+		for i, r := range contextSnippets {
+			parts = append(parts, fmt.Sprintf("%d. [%s]: %s", i+1, r.Title, r.Snippet))
+		}
+		llmMessages = append(llmMessages, LLMMessage{
+			Role:    "system",
+			Content: "Here is relevant context:\n" + strings.Join(parts, "\n"),
+		})
+	}
+
+	// 6. Add message history
 	for _, msg := range history {
 		role := "user"
 		if msg.Role == greysealv1.MessageRole_MESSAGE_ROLE_ASSISTANT {
 			role = "assistant"
 		}
-		llmMessages = append(llmMessages, LLMMessage{
-			Role:    role,
-			Content: msg.Content,
-		})
+		llmMessages = append(llmMessages, LLMMessage{Role: role, Content: msg.Content})
 	}
 
-	// Add current user message last
-	llmMessages = append(llmMessages, LLMMessage{
-		Role:    "user",
-		Content: content,
-	})
+	// 7. Append current user turn
+	llmMessages = append(llmMessages, LLMMessage{Role: "user", Content: content})
 
-	// 9. Call LLM (with streaming) or fall back to placeholder
+	// 8. Call LLM (with streaming) or fall back to placeholder
 	var responseContent string
 	if srv.llm != nil {
 		responseContent, err = srv.llm.Chat(ctx, llmMessages, stream)
@@ -214,7 +226,7 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		}
 	}
 
-	// 10. Save assistant message to DB
+	// 9. Save assistant message to DB
 	assistantMsg := &greysealv1.Message{
 		Uuid:             uuid.New().String(),
 		ConversationUuid: conversationUUID,
@@ -222,12 +234,11 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		Content:          responseContent,
 		CreatedAt:        timestamppb.New(time.Now()),
 	}
-
 	if err := srv.messageRepo.Create(ctx, assistantMsg); err != nil {
 		return nil, fmt.Errorf("failed to save assistant message: %w", err)
 	}
 
-	// Update conversation updated_at (preserve existing fields to avoid overwriting with nulls)
+	// Update conversation updated_at (preserve all existing fields).
 	_ = srv.conversationRepo.Update(ctx, conversationUUID, &greysealv1.Conversation{
 		Uuid:          conversationUUID,
 		Title:         conv.Title,
@@ -238,6 +249,60 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	})
 
 	return assistantMsg, nil
+}
+
+// contextSearch retrieves relevant snippets for the given query and resource scope.
+// It checks the per-conversation Redis cache first; on a miss it calls shrike and
+// populates the cache with the results.
+func (srv *conversationService) contextSearch(ctx context.Context, conversationUUID, query string, resourceUUIDs []string) []SearchResult {
+	if srv.cache != nil {
+		if cached, err := srv.cache.List(ctx, conversationUUID); err == nil && len(cached) > 0 {
+			results := make([]SearchResult, len(cached))
+			for i, c := range cached {
+				results[i] = SearchResult{EntityUUID: c.EntityUUID, Title: c.Title, Snippet: c.Snippet, Score: c.Score}
+			}
+			return results
+		}
+	}
+	if srv.searcher == nil {
+		return nil
+	}
+	results, err := srv.searcher.Search(ctx, query, 5, resourceUUIDs)
+	if err != nil || len(results) == 0 {
+		return nil
+	}
+	if srv.cache != nil {
+		cached := make([]CachedResource, len(results))
+		for i, r := range results {
+			cached[i] = CachedResource{EntityUUID: r.EntityUUID, Title: r.Title, Snippet: r.Snippet, Score: r.Score}
+		}
+		_ = srv.cache.Merge(ctx, conversationUUID, cached)
+	}
+	return results
+}
+
+// summarizeMessages calls the LLM to produce a concise summary of the given messages.
+// Returns an empty string if the LLM is unavailable or returns an error.
+func (srv *conversationService) summarizeMessages(ctx context.Context, messages []*greysealv1.Message) string {
+	if srv.llm == nil || len(messages) == 0 {
+		return ""
+	}
+	prompt := []LLMMessage{
+		{Role: "system", Content: "Summarize the following conversation in a few sentences, preserving key facts and decisions."},
+	}
+	for _, msg := range messages {
+		role := "user"
+		if msg.Role == greysealv1.MessageRole_MESSAGE_ROLE_ASSISTANT {
+			role = "assistant"
+		}
+		prompt = append(prompt, LLMMessage{Role: role, Content: msg.Content})
+	}
+	summary, err := srv.llm.Chat(ctx, prompt, func(_ string) error { return nil })
+	if err != nil {
+		srv.logger.Warn("failed to summarize conversation history", zap.Error(err))
+		return ""
+	}
+	return summary
 }
 
 func (srv *conversationService) SubmitFeedback(ctx context.Context, messageUUID string, feedback int32) error {
