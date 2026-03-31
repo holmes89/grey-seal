@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"go.uber.org/zap"
+
 	"github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	"github.com/holmes89/grey-seal/lib/greyseal/conversation/mocks"
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
@@ -27,7 +29,7 @@ func (s *ConversationServiceTestSuite) SetupTest() {
 	s.searcher = mocks.NewMockSearcher(s.T())
 	s.roleRepo = mocks.NewMockRoleRepository(s.T())
 	s.llm = mocks.NewMockLLM(s.T())
-	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm)
+	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, zap.NewNop())
 }
 
 func (s *ConversationServiceTestSuite) TestList() {

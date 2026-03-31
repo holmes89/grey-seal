@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 	connectcors "connectrpc.com/cors"
 	"github.com/rs/cors"
+	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
@@ -27,10 +27,13 @@ import (
 )
 
 func main() {
+	logger, _ := zap.NewProduction()
+	defer logger.Sync() //nolint:errcheck
+
 	dbURL := os.Getenv("DATABASE_URL")
 	store, err := repo.NewDatabase(dbURL)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		logger.Fatal("failed to connect to database", zap.Error(err))
 	}
 	defer store.Close()
 
@@ -47,8 +50,9 @@ func main() {
 
 	// Role service
 	roleRepo := &repo.RoleRepo{Conn: store}
-	roleSvc := rolesvc.NewRoleService(roleRepo)
+	roleSvc := rolesvc.NewRoleService(roleRepo, logger)
 	rolePath, roleHandler := servicesconnect.NewRoleServiceHandler(rolegrpc.NewRoleHandler(roleSvc))
+	logger.Info("registering role service route", zap.String("path", rolePath))
 	mux.Handle(rolePath, withCORS(roleHandler))
 
 	// Conversation service
@@ -60,8 +64,10 @@ func main() {
 		searcher,
 		roleRepo,
 		ollamaLLM,
+		logger,
 	)
 	convPath, convHandler := servicesconnect.NewConversationServiceHandler(conversationgrpc.NewConversationHandler(convSvc))
+	logger.Info("registering conversation service route", zap.String("path", convPath))
 	mux.Handle(convPath, withCORS(convHandler))
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +76,7 @@ func main() {
 
 	errs := make(chan error, 2)
 	go func() {
-		log.Println("listening on :9000")
+		logger.Info("listening on :9000")
 		errs <- http.ListenAndServe(":9000", h2c.NewHandler(mux, &http2.Server{}))
 	}()
 	go func() {
@@ -79,7 +85,7 @@ func main() {
 		errs <- fmt.Errorf("signal: %s", <-c)
 	}()
 
-	log.Printf("terminated: %s\n", <-errs)
+	logger.Info("terminated", zap.String("reason", (<-errs).Error()))
 }
 
 func withCORS(h http.Handler) http.Handler {

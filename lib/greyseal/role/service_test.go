@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"go.uber.org/zap"
+
 	"github.com/holmes89/archaea/base"
 	"github.com/holmes89/grey-seal/lib/greyseal/role"
 	"github.com/holmes89/grey-seal/lib/greyseal/role/mocks"
@@ -20,7 +22,7 @@ type RoleServiceTestSuite struct {
 
 func (s *RoleServiceTestSuite) SetupTest() {
 	s.repo = mocks.NewMockRoleRepository(s.T())
-	s.svc = role.NewRoleService(s.repo)
+	s.svc = role.NewRoleService(s.repo, zap.NewNop())
 }
 
 func (s *RoleServiceTestSuite) TestList() {

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/holmes89/archaea/base"
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -32,6 +33,7 @@ type conversationService struct {
 	searcher         Searcher       // optional
 	roleRepo         RoleRepository // optional
 	llm              LLM            // optional
+	logger           *zap.Logger
 }
 
 func NewConversationService(
@@ -40,6 +42,7 @@ func NewConversationService(
 	searcher Searcher,
 	roleRepo RoleRepository,
 	llm LLM,
+	logger *zap.Logger,
 ) ConversationService {
 	return &conversationService{
 		conversationRepo: conversationRepo,
@@ -47,11 +50,16 @@ func NewConversationService(
 		searcher:         searcher,
 		roleRepo:         roleRepo,
 		llm:              llm,
+		logger:           logger,
 	}
 }
 
 func (srv *conversationService) List(ctx context.Context, lis base.ListRequest) (base.ListResponse[*greysealv1.Conversation], error) {
+	srv.logger.Info("listing conversations")
 	data, err := srv.conversationRepo.List(ctx, lis.GetCursor(), uint(lis.GetCount()), nil)
+	if err != nil {
+		srv.logger.Error("failed to list conversations", zap.Error(err))
+	}
 	return &base.ListGenericResponse[*greysealv1.Conversation]{
 		Cursor: "",
 		Count:  int32(len(data)),
@@ -60,7 +68,11 @@ func (srv *conversationService) List(ctx context.Context, lis base.ListRequest) 
 }
 
 func (srv *conversationService) Get(ctx context.Context, get base.GetRequest[*greysealv1.Conversation]) (base.GetResponse[*greysealv1.Conversation], error) {
+	srv.logger.Info("getting conversation", zap.String("uuid", get.GetUuid()))
 	data, err := srv.conversationRepo.Get(ctx, get.GetUuid())
+	if err != nil {
+		srv.logger.Error("failed to get conversation", zap.String("uuid", get.GetUuid()), zap.Error(err))
+	}
 	return &base.GetGenericResponse[*greysealv1.Conversation]{Data: data}, err
 }
 
@@ -72,27 +84,38 @@ func (srv *conversationService) Create(ctx context.Context, data *greysealv1.Con
 	data.CreatedAt = now
 	data.UpdatedAt = now
 
+	srv.logger.Info("creating conversation", zap.String("title", data.GetTitle()))
 	err := srv.conversationRepo.Create(ctx, data)
 	if err != nil {
+		srv.logger.Error("failed to create conversation", zap.Error(err))
 		return nil, err
 	}
+	srv.logger.Info("conversation created", zap.String("uuid", data.Uuid))
 	return data, nil
 }
 
 func (srv *conversationService) Update(ctx context.Context, id string, data *greysealv1.Conversation) (*greysealv1.Conversation, error) {
+	srv.logger.Info("updating conversation", zap.String("uuid", id))
 	data.UpdatedAt = timestamppb.New(time.Now())
 	err := srv.conversationRepo.Update(ctx, id, data)
 	if err != nil {
+		srv.logger.Error("failed to update conversation", zap.String("uuid", id), zap.Error(err))
 		return nil, err
 	}
 	return data, nil
 }
 
 func (srv *conversationService) Delete(ctx context.Context, id string) error {
-	return srv.conversationRepo.Delete(ctx, id)
+	srv.logger.Info("deleting conversation", zap.String("uuid", id))
+	err := srv.conversationRepo.Delete(ctx, id)
+	if err != nil {
+		srv.logger.Error("failed to delete conversation", zap.String("uuid", id), zap.Error(err))
+	}
+	return err
 }
 
 func (srv *conversationService) Chat(ctx context.Context, conversationUUID string, content string, stream func(token string) error) (*greysealv1.Message, error) {
+	srv.logger.Info("chat request", zap.String("conversation_uuid", conversationUUID))
 	// 1. Save user message to DB
 	userMsg := &greysealv1.Message{
 		Uuid:             uuid.New().String(),
@@ -102,6 +125,7 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		CreatedAt:        timestamppb.New(time.Now()),
 	}
 	if err := srv.messageRepo.Create(ctx, userMsg); err != nil {
+		srv.logger.Error("failed to save user message", zap.String("conversation_uuid", conversationUUID), zap.Error(err))
 		return nil, fmt.Errorf("failed to save user message: %w", err)
 	}
 
@@ -180,6 +204,7 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	if srv.llm != nil {
 		responseContent, err = srv.llm.Chat(ctx, llmMessages, stream)
 		if err != nil {
+			srv.logger.Error("LLM chat failed", zap.String("conversation_uuid", conversationUUID), zap.Error(err))
 			return nil, fmt.Errorf("LLM chat failed: %w", err)
 		}
 	} else {
