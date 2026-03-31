@@ -5,8 +5,10 @@ import (
 	"embed"
 	"fmt"
 
+	"github.com/XSAM/otelsql"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 //go:embed migrations/*.sql
@@ -25,7 +27,11 @@ func (c *Conn) Close() {
 }
 
 func NewDatabase(connStr string) (*Conn, error) {
-	db, err := sql.Open("postgres", connStr)
+	driverName, err := otelsql.Register("postgres", otelsql.WithAttributes(semconv.DBSystemPostgreSQL))
+	if err != nil {
+		driverName = "postgres"
+	}
+	db, err := sql.Open(driverName, connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open db: %w", err)
 	}

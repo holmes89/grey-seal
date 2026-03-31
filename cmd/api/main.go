@@ -11,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 	connectcors "connectrpc.com/cors"
 	"github.com/rs/cors"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -27,8 +28,16 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
 	logger, _ := zap.NewProduction()
 	defer logger.Sync() //nolint:errcheck
+
+	shutdown, err := initOTel(ctx, "grey-seal", logger)
+	if err != nil {
+		logger.Warn("failed to initialize OTel", zap.Error(err))
+	} else {
+		defer shutdown(ctx)
+	}
 
 	dbURL := os.Getenv("DATABASE_URL")
 	store, err := repo.NewDatabase(dbURL)
@@ -77,7 +86,7 @@ func main() {
 	errs := make(chan error, 2)
 	go func() {
 		logger.Info("listening on :9000")
-		errs <- http.ListenAndServe(":9000", h2c.NewHandler(mux, &http2.Server{}))
+		errs <- http.ListenAndServe(":9000", h2c.NewHandler(otelhttp.NewHandler(mux, "grey-seal"), &http2.Server{}))
 	}()
 	go func() {
 		c := make(chan os.Signal, 1)
