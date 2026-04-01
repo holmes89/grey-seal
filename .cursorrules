@@ -1,0 +1,76 @@
+# Grey-Seal — Cursor Rules
+
+See `docs/CONVENTIONS.md` for the full convention reference.
+
+## Language & Runtime
+
+- Go 1.26, module `github.com/holmes89/grey-seal`
+- All code must pass `go vet ./...` and `golangci-lint run ./...`
+
+## Project Structure
+
+```
+cmd/api/          ConnectRPC HTTP/2 server + shrikeSearcher adapter
+cmd/worker/       Kafka consumer runner
+lib/greyseal/     Domain packages: conversation, resource, role
+lib/repo/         PostgreSQL connection + repositories
+lib/repo/ollama/  Ollama LLM adapter
+lib/repo/cache/   Redis resource cache adapter
+lib/schemas/      Generated protobuf — never edit
+```
+
+## Domain Package Layout
+
+Each `lib/greyseal/<entity>/` must have:
+- `interface.go` — exported service interface + types
+- `service.go` — unexported impl; starts with `var _ EntityService = (*entityService)(nil)`
+- `grpc/service.go` — ConnectRPC handler
+- `mocks/` — mockery output, never hand-edited
+
+## Code Patterns
+
+### Constructor returns interface
+
+```go
+func NewConversationService(..., logger *zap.Logger) ConversationService {
+    return &conversationService{...}
+}
+```
+
+### Optional dependencies pattern (env-var gated)
+
+```go
+// In main.go — pass nil when env var absent
+var resourceCache conversationsvc.ResourceCache
+if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
+    rdb := redis.NewClient(&redis.Options{Addr: redisURL})
+    resourceCache = cache.NewRedisResourceCache(rdb)
+}
+```
+
+### Shrike adapter (keeps domain clean)
+
+```go
+type shrikeSearcher struct{ client shrikeconnect.SearchServiceClient }
+func (s *shrikeSearcher) Search(ctx context.Context, query string, limit int32, resourceUUIDs []string) ([]conversationsvc.SearchResult, error)
+```
+
+## Testing
+
+- Unit: `package conversation_test`, testify/suite, `zap.NewNop()`, mockery mocks
+- Integration: `//go:build integration`, dockertest `postgres:16-alpine`, no mocks
+- Never mock the database in integration tests
+
+## Observability
+
+- `initOTel(ctx, "grey-seal", logger)` — noop if `OTEL_EXPORTER_OTLP_ENDPOINT` unset
+- DB: `github.com/XSAM/otelsql` (not `go.opentelemetry.io/contrib/…/otelsql`)
+- HTTP: `otelhttp.NewHandler(mux, "grey-seal")`
+
+## Banned Patterns
+
+- Hand-editing `lib/schemas/` — generated code only
+- Raw SQL strings in repository code — use squirrel
+- Returning concrete types from constructors — return interfaces
+- `go.opentelemetry.io/contrib/instrumentation/database/sql/otelsql` — does not exist
+- Mocking the DB in integration tests
