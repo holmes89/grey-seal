@@ -259,7 +259,7 @@ func (srv *conversationService) contextSearch(ctx context.Context, conversationU
 		if cached, err := srv.cache.List(ctx, conversationUUID); err == nil && len(cached) > 0 {
 			results := make([]SearchResult, len(cached))
 			for i, c := range cached {
-				results[i] = SearchResult{EntityUUID: c.EntityUUID, Title: c.Title, Snippet: c.Snippet, Score: c.Score}
+				results[i] = SearchResult(c)
 			}
 			return results
 		}
@@ -274,7 +274,7 @@ func (srv *conversationService) contextSearch(ctx context.Context, conversationU
 	if srv.cache != nil {
 		cached := make([]CachedResource, len(results))
 		for i, r := range results {
-			cached[i] = CachedResource{EntityUUID: r.EntityUUID, Title: r.Title, Snippet: r.Snippet, Score: r.Score}
+			cached[i] = CachedResource(r)
 		}
 		_ = srv.cache.Merge(ctx, conversationUUID, cached)
 	}

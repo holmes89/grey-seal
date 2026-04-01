@@ -38,7 +38,7 @@ func main() {
 
 	// Producer that forwards fetched content to the shrike TextExtractedConsumer.
 	textProducer := kafka.NewProducer[*shrikev1.TextExtractedEvent](kConn)
-	defer textProducer.Close()
+	defer func() { _ = textProducer.Close() }()
 
 	// Consumer for Resource protos enqueued by the API's kafkaIndexer for
 	// SOURCE_WEBSITE / SOURCE_PDF resources that require async content fetching.
