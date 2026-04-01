@@ -9,8 +9,7 @@ import (
 	"testing"
 	"time"
 
-	dockertestlib "github.com/ory/dockertest/v3"
-	docker "github.com/ory/dockertest/v3/docker"
+	"github.com/holmes89/archaea/testutil"
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/stretchr/testify/suite"
@@ -27,48 +26,18 @@ const (
 	roleUUID3 = "00000000-0000-0000-0000-000000000013"
 )
 
+// integrationDSN holds the full postgres:// URL used by repo.NewDatabase.
 var integrationDSN string
 
 func TestMain(m *testing.M) {
-	pool, err := dockertestlib.NewPool("")
-	if err != nil {
-		fmt.Printf("could not connect to docker: %v\n", err)
-		os.Exit(1)
-	}
-	pool.MaxWait = 60 * time.Second
-
-	resource, err := pool.RunWithOptions(&dockertestlib.RunOptions{
-		Repository: "postgres",
-		Tag:        "16-alpine",
-		Env: []string{
-			"POSTGRES_PASSWORD=postgres",
-			"POSTGRES_USER=postgres",
-			"POSTGRES_DB=greyseal_test",
-		},
-	}, func(config *docker.HostConfig) {
-		config.AutoRemove = true
-		config.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
-	if err != nil {
-		fmt.Printf("could not start postgres: %v\n", err)
-		os.Exit(1)
-	}
-
-	integrationDSN = fmt.Sprintf(
-		"postgres://postgres:postgres@localhost:%s/greyseal_test?sslmode=disable",
-		resource.GetPort("5432/tcp"),
-	)
-
-	if err := pool.Retry(func() error {
-		_, err := repo.NewDatabase(integrationDSN)
+	dsn, cleanup := testutil.SetupPostgres("postgres", "postgres", "greyseal_test", func(dsn string) error {
+		_, err := repo.NewDatabase("postgres://" + dsn)
 		return err
-	}); err != nil {
-		fmt.Printf("could not connect to postgres: %v\n", err)
-		os.Exit(1)
-	}
+	})
+	integrationDSN = "postgres://" + dsn
 
 	code := m.Run()
-	_ = pool.Purge(resource)
+	cleanup()
 	os.Exit(code)
 }
 

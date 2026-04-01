@@ -2,20 +2,14 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"connectrpc.com/connect"
-	connectcors "connectrpc.com/cors"
+	"github.com/holmes89/archaea/server"
 	"github.com/redis/go-redis/v9"
-	"github.com/rs/cors"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.uber.org/zap"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 
 	conversationsvc "github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	conversationgrpc "github.com/holmes89/grey-seal/lib/greyseal/conversation/grpc"
@@ -32,7 +26,9 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	logger, _ := zap.NewProduction()
 	defer logger.Sync() //nolint:errcheck
 
@@ -59,14 +55,16 @@ func main() {
 	shrikeClient := shrikeconnect.NewSearchServiceClient(&http.Client{}, shrikeURL)
 	searcher := &shrikeSearcher{client: shrikeClient}
 
-	mux := http.NewServeMux()
+	srv := server.New(":9000",
+		func(h http.Handler) http.Handler { return otelhttp.NewHandler(h, "grey-seal") },
+	)
 
 	// Role service
 	roleRepo := &repo.RoleRepo{Conn: store}
 	roleSvc := rolesvc.NewRoleService(roleRepo, logger)
 	rolePath, roleHandler := servicesconnect.NewRoleServiceHandler(rolegrpc.NewRoleHandler(roleSvc))
 	logger.Info("registering role service route", zap.String("path", rolePath))
-	mux.Handle(rolePath, withCORS(roleHandler))
+	srv.Handle(rolePath, roleHandler)
 
 	// Resource service (Kafka indexer is wired only when KAFKA_BROKERS is set)
 	var indexer resourcesvc.Indexer
@@ -77,7 +75,7 @@ func main() {
 	resSvc := resourcesvc.NewResourceService(resourceRepo, indexer, logger)
 	resourcePath, resourceHandler := servicesconnect.NewResourceServiceHandler(resourcegrpc.NewResourceHandler(resSvc))
 	logger.Info("registering resource service route", zap.String("path", resourcePath))
-	mux.Handle(resourcePath, withCORS(resourceHandler))
+	srv.Handle(resourcePath, resourceHandler)
 
 	// Per-conversation resource cache (optional; requires REDIS_URL)
 	var resourceCache conversationsvc.ResourceCache
@@ -100,33 +98,15 @@ func main() {
 	)
 	convPath, convHandler := servicesconnect.NewConversationServiceHandler(conversationgrpc.NewConversationHandler(convSvc))
 	logger.Info("registering conversation service route", zap.String("path", convPath))
-	mux.Handle(convPath, withCORS(convHandler))
+	srv.Handle(convPath, convHandler)
 
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "ok") //nolint:errcheck
+	srv.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok")) //nolint:errcheck
 	})
 
-	errs := make(chan error, 2)
-	go func() {
-		logger.Info("listening on :9000")
-		errs <- http.ListenAndServe(":9000", h2c.NewHandler(otelhttp.NewHandler(mux, "grey-seal"), &http2.Server{}))
-	}()
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-		errs <- fmt.Errorf("signal: %s", <-c)
-	}()
-
-	logger.Info("terminated", zap.String("reason", (<-errs).Error()))
-}
-
-func withCORS(h http.Handler) http.Handler {
-	return cors.New(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: connectcors.AllowedMethods(),
-		AllowedHeaders: connectcors.AllowedHeaders(),
-		ExposedHeaders: connectcors.ExposedHeaders(),
-	}).Handler(h)
+	if err := srv.Run(ctx); err != nil {
+		logger.Info("terminated", zap.String("reason", err.Error()))
+	}
 }
 
 // shrikeSearcher adapts the shrike SearchServiceClient to conversation.Searcher.

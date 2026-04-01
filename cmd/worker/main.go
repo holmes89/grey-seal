@@ -2,15 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/holmes89/archaea/kafka"
+	"github.com/holmes89/archaea/worker"
 	"github.com/holmes89/grey-seal/lib/greyseal/resource"
 	"github.com/holmes89/grey-seal/lib/repo"
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
@@ -20,6 +18,9 @@ import (
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	dbURL := os.Getenv("DATABASE_URL")
 	store, err := repo.NewDatabase(dbURL)
 	if err != nil {
@@ -53,18 +54,10 @@ func main() {
 
 	resourceRepo := &repo.ResourceRepo{Conn: store}
 
-	fmt.Println("worker started, consuming resources...")
-
-	errs := make(chan error, 1)
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-		errs <- fmt.Errorf("signal: %s", <-c)
-	}()
-
 	go processResources(resourceConsumer, textProducer, resourceRepo)
 
-	log.Printf("terminated: %s\n", <-errs)
+	log.Println("worker started, consuming resources...")
+	worker.Run(ctx, cancel, resourceConsumer)
 }
 
 // processResources reads Resource protos from Kafka, fetches their content,
@@ -100,7 +93,6 @@ func processResources(
 			continue
 		}
 
-		// Mark the resource as indexed now that the content has been forwarded to shrike.
 		r.IndexedAt = timestamppb.New(time.Now())
 		if err := resourceRepo.Update(ctx, r.Uuid, r); err != nil {
 			log.Printf("worker: failed to update indexed_at for resource %s: %v", r.Uuid, err)
