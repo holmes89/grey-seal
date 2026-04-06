@@ -1,0 +1,63 @@
+name: Publish Docs
+
+on:
+  workflow_run:
+    workflows: ["CI / Build and Publish Docker Images"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  publish-docs:
+    name: Publish Docs to joelholmes.dev
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout joelholmes.dev
+        uses: actions/checkout@v4
+        with:
+          repository: holmes89/joelholmes.dev
+          path: site
+          ssh-key: ${{ secrets.SITE_DEPLOY_KEY }}
+
+      - name: Set up buf
+        uses: bufbuild/buf-setup-action@v1
+
+      - name: Generate API docs
+        run: buf generate --template buf.docs.yaml
+
+      - name: Generate about.md
+        run: |
+          {
+            printf -- '---\ntitle: "About"\nweight: 1\n---\n\n'
+            tail -n +2 docs/ABOUT.md
+          } > site/content/projects/grey-seal/about.md
+
+      - name: Generate arch.md
+        run: |
+          {
+            printf -- '---\ntitle: "Architecture"\nweight: 2\n---\n\n'
+            tail -n +2 docs/ARCH.md
+          } > site/content/projects/grey-seal/arch.md
+
+      - name: Generate api.md
+        run: |
+          {
+            printf -- '---\ntitle: "API Reference"\nweight: 3\n---\n\n'
+            cat docs/api.md
+          } > site/content/projects/grey-seal/api.md
+
+      - name: Commit and push
+        run: |
+          cd site
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add content/projects/grey-seal/
+          git diff --staged --quiet || git commit -m "docs(grey-seal): update generated documentation"
+          git push
