@@ -107,6 +107,31 @@ func TestConversationGetComponent_PropagatesNotFound(t *testing.T) {
 	assert.Nil(t, conv)
 }
 
+func TestConversationGetComponent_LoadData_ReturnsMessages(t *testing.T) {
+	const convID = "conv-uuid-1"
+	svc := mocks.NewMockConversationService(t)
+	svc.On("GetConversation", mock.Anything, convID).Return(
+		&servicesv1.GetConversationResponse{
+			Data: &greysealv1.Conversation{
+				Uuid:  convID,
+				Title: "Planning Chat",
+				Messages: []*greysealv1.Message{
+					{Uuid: "m-1", Role: greysealv1.MessageRole_MESSAGE_ROLE_USER, Content: "hello"},
+					{Uuid: "m-2", Role: greysealv1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "hi there", ResourceUuids: []string{"r-1", "r-2"}},
+				},
+			},
+		}, nil)
+
+	comp := &ConversationGetComponent{ConversationSvc: svc}
+	conv, err := comp.loadData(context.Background(), convID)
+
+	require.NoError(t, err)
+	require.Len(t, conv.Messages, 2)
+	assert.Equal(t, greysealv1.MessageRole_MESSAGE_ROLE_USER, conv.Messages[0].Role)
+	assert.Equal(t, greysealv1.MessageRole_MESSAGE_ROLE_ASSISTANT, conv.Messages[1].Role)
+	assert.Equal(t, []string{"r-1", "r-2"}, conv.Messages[1].ResourceUuids)
+}
+
 // ---------------------------------------------------------------------------
 // ConversationUpdateComponent
 // ---------------------------------------------------------------------------

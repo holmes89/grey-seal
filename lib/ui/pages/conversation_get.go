@@ -2,7 +2,6 @@ package pages
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
@@ -118,21 +117,64 @@ func (p *ConversationGetComponent) renderDetails() app.UI {
 	if p.item == nil {
 		return app.Div()
 	}
-	return app.Div().
-		Body(
-			app.Header().Body(
-				app.H2().Text(p.item.Title),
-				app.P().Text("Title: "+p.item.Title),
-				app.P().Text("RoleUuid: "+p.item.RoleUuid),
-				app.P().Text("ResourceUuids: "+strings.Join(p.item.ResourceUuids, ", ")),
-				app.P().Text("Summary: "+p.item.Summary),
-				app.P().Text("CreatedAt: "+p.item.CreatedAt.AsTime().Format(time.RFC3339)),
-			),
-			app.Div().Body(
-				&components.ButtonLink{Href: p.Navigation.ConversationUpdateURL(p.id), Text: "Edit Conversation"},
-				app.Button().Class("button outline danger").OnClick(p.onDelete).Text("Delete Conversation"),
-			),
-		)
+	summary := "—"
+	if p.item.Summary != "" {
+		summary = p.item.Summary
+	}
+	return app.Div().Body(
+		app.Header().Body(
+			app.H2().Text(p.item.Title),
+		),
+		app.Dl().Body(
+			app.Dt().Text("Summary"),
+			app.Dd().Text(summary),
+			app.Dt().Text("Created"),
+			app.Dd().Text(p.item.CreatedAt.AsTime().Format(time.RFC3339)),
+		),
+		app.H3().Text("Messages"),
+		p.renderMessages(),
+		app.Div().Body(
+			&components.ButtonLink{Href: p.Navigation.ConversationUpdateURL(p.id), Text: "Edit Conversation"},
+			app.Button().Class("button outline danger").OnClick(p.onDelete).Text("Delete Conversation"),
+		),
+	)
+}
+
+func (p *ConversationGetComponent) renderMessages() app.UI {
+	if len(p.item.Messages) == 0 {
+		return app.P().Text("No messages.")
+	}
+	return app.Div().Class("chat-messages").Body(
+		app.Range(p.item.Messages).Slice(func(i int) app.UI {
+			msg := p.item.Messages[i]
+			isAssistant := msg.Role == greysealv1.MessageRole_MESSAGE_ROLE_ASSISTANT
+			roleClass := "message-user"
+			roleLabel := "You"
+			if isAssistant {
+				roleClass = "message-assistant"
+				roleLabel = "Assistant"
+			}
+			children := []app.UI{
+				app.Strong().Text(roleLabel),
+				app.P().Text(msg.Content),
+			}
+			if isAssistant && len(msg.ResourceUuids) > 0 {
+				links := make([]app.UI, len(msg.ResourceUuids))
+				for j, uuid := range msg.ResourceUuids {
+					links[j] = app.Li().Body(
+						app.A().Href("/resources/"+uuid).Text(uuid),
+					)
+				}
+				children = append(children,
+					app.Details().Body(
+						app.Summary().Text("Sources"),
+						app.Ul().Body(links...),
+					),
+				)
+			}
+			return app.Div().Class("message "+roleClass).Body(children...)
+		}),
+	)
 }
 
 func (p *ConversationGetComponent) onDelete(ctx app.Context, e app.Event) {
