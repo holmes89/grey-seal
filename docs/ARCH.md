@@ -17,7 +17,7 @@ C4Context
 
   SystemDb(postgres, "PostgreSQL", "Conversations, messages, roles, resources")
   SystemDb(redis, "Redis", "Per-conversation resource snippet cache (24 h TTL)")
-  SystemExternal(ollama, "Ollama", "Local LLM (deepseek-r1) — streaming chat completions")
+  System_Ext(ollama, "Ollama", "Local LLM (deepseek-r1) — streaming chat completions")
   SystemQueue(kafka, "Kafka", "greyseal.v1.Resource (ingest queue) · shrike.v1.TextExtractedEvent")
 
   Rel(admin, ui, "Uses")
@@ -26,8 +26,9 @@ C4Context
   Rel(greyseal, redis, "Resource snippet cache")
   Rel(greyseal, ollama, "Streaming LLM chat")
   Rel(greyseal, shrike, "ConnectRPC hybrid search for context")
-  Rel(greyseal, kafka, "Publishes resource events · consumes async ingest")
-  Rel(magpie, kafka, "Consumes greyseal resource events")
+  Rel(greyseal, kafka, "Publishes greyseal.v1.Resource")
+  Rel(kafka, greyseal, "async ingest queue")
+  Rel(kafka, magpie, "greyseal.v1.Resource")
 ```
 
 ## Container Diagram
@@ -51,8 +52,8 @@ C4Container
 
   SystemDb(postgres, "PostgreSQL", "")
   SystemDb(redis, "Redis", "")
-  SystemExternal(ollama, "Ollama", "POST /api/chat stream")
-  SystemExternal(shrike, "Shrike", "ConnectRPC SearchService")
+  System_Ext(ollama, "Ollama", "POST /api/chat stream")
+  System_Ext(shrike, "Shrike", "ConnectRPC SearchService")
   SystemQueue(kafka, "Kafka", "")
 
   Rel(api, convSvc, "Chat · CRUD")
@@ -63,8 +64,8 @@ C4Container
   Rel(convSvc, ollama, "Streaming completion")
   Rel(convSvc, convRepo, "Persist messages + summary")
   Rel(resourceSvc, resourceRepo, "CRUD")
-  Rel(resourceSvc, kafka, "KafkaIndexer: TextExtractedEvent or greyseal.v1.Resource")
-  Rel(worker, kafka, "Consumes greyseal.v1.Resource")
+  Rel(resourceSvc, kafka, "Publishes TextExtractedEvent or greyseal.v1.Resource")
+  Rel(kafka, worker, "greyseal.v1.Resource")
   Rel(worker, kafka, "Publishes shrike.v1.TextExtractedEvent")
   Rel(convRepo, postgres, "SQL")
   Rel(resourceRepo, postgres, "SQL")
