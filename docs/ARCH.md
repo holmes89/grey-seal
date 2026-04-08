@@ -1,5 +1,76 @@
 # Architecture
 
+## System Context
+
+```mermaid
+C4Context
+  title System Context — Grey Seal within joel.holmes.haus
+
+  Person(admin, "Admin", "Manages conversations and resources; chats with the assistant")
+
+  Boundary(platform, "joel.holmes.haus Platform") {
+    System(ui, "joel.holmes.haus", "Go-app WASM admin SPA")
+    System(greyseal, "Grey Seal", "RAG-powered conversation and resource management service")
+    System(shrike, "Shrike", "Search — provides hybrid semantic/keyword context retrieval")
+    System(magpie, "Magpie", "Resource hub — receives ingested resources from Grey Seal")
+  }
+
+  SystemDb(postgres, "PostgreSQL", "Conversations, messages, roles, resources")
+  SystemDb(redis, "Redis", "Per-conversation resource snippet cache (24 h TTL)")
+  SystemExternal(ollama, "Ollama", "Local LLM (deepseek-r1) — streaming chat completions")
+  SystemQueue(kafka, "Kafka", "greyseal.v1.Resource (ingest queue) · shrike.v1.TextExtractedEvent")
+
+  Rel(admin, ui, "Uses")
+  Rel(ui, greyseal, "ConnectRPC")
+  Rel(greyseal, postgres, "Reads / writes")
+  Rel(greyseal, redis, "Resource snippet cache")
+  Rel(greyseal, ollama, "Streaming LLM chat")
+  Rel(greyseal, shrike, "ConnectRPC hybrid search for context")
+  Rel(greyseal, kafka, "Publishes resource events · consumes async ingest")
+  Rel(magpie, kafka, "Consumes greyseal resource events")
+```
+
+## Container Diagram
+
+```mermaid
+C4Container
+  title Grey Seal — Internal Containers
+
+  Boundary(greyseal, "Grey Seal") {
+    Container(api, "cmd/api", "Go / ConnectRPC h2c :9000", "ConversationService · ResourceService · RoleService")
+    Container(worker, "cmd/worker", "Go / Kafka", "Async content fetch — scrapes websites/PDFs, publishes TextExtractedEvent to Shrike")
+
+    Container(convSvc, "conversation.Service", "Go", "Chat (RAG pipeline) · CRUD · SubmitFeedback · summarisation")
+    Container(resourceSvc, "resource.Service", "Go", "Ingest · CRUD — triggers async indexing via KafkaIndexer")
+    Container(roleSvc, "role.Service", "Go", "CRUD for system prompt roles")
+    Container(cache, "RedisResourceCache", "Go / Redis", "Per-conversation snippet cache keyed greyseal:conv:{uuid}:resources")
+
+    ContainerDb(convRepo, "ConversationRepo + MessageRepo", "PostgreSQL / squirrel", "conversations · messages tables")
+    ContainerDb(resourceRepo, "ResourceRepo", "PostgreSQL / squirrel", "resources table")
+  }
+
+  SystemDb(postgres, "PostgreSQL", "")
+  SystemDb(redis, "Redis", "")
+  SystemExternal(ollama, "Ollama", "POST /api/chat stream")
+  SystemExternal(shrike, "Shrike", "ConnectRPC SearchService")
+  SystemQueue(kafka, "Kafka", "")
+
+  Rel(api, convSvc, "Chat · CRUD")
+  Rel(api, resourceSvc, "Ingest · CRUD")
+  Rel(api, roleSvc, "CRUD")
+  Rel(convSvc, cache, "Cache-first context lookup")
+  Rel(convSvc, shrike, "Hybrid search with EntityUUIDs filter")
+  Rel(convSvc, ollama, "Streaming completion")
+  Rel(convSvc, convRepo, "Persist messages + summary")
+  Rel(resourceSvc, resourceRepo, "CRUD")
+  Rel(resourceSvc, kafka, "KafkaIndexer: TextExtractedEvent or greyseal.v1.Resource")
+  Rel(worker, kafka, "Consumes greyseal.v1.Resource")
+  Rel(worker, kafka, "Publishes shrike.v1.TextExtractedEvent")
+  Rel(convRepo, postgres, "SQL")
+  Rel(resourceRepo, postgres, "SQL")
+  Rel(cache, redis, "GET / SET")
+```
+
 ## Overview
 
 grey-seal is a single-binary Go service (`cmd/api`) that exposes a Connect-RPC API over HTTP/2 (h2c). It uses a layered architecture: a thin gRPC/Connect handler layer delegates to domain service interfaces, which are backed by PostgreSQL repositories. LLM inference is delegated to a local Ollama instance; semantic search is delegated to the external **shrike** service. Resources are ingested asynchronously via **Redpanda/Kafka**: the API enqueues events that the **worker** process consumes to fetch content and forward it to shrike for chunking, embedding, and vector indexing.
