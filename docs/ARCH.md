@@ -75,46 +75,42 @@ C4Container
 
 grey-seal is a single-binary Go service (`cmd/api`) that exposes a Connect-RPC API over HTTP/2 (h2c). It uses a layered architecture: a thin gRPC/Connect handler layer delegates to domain service interfaces, which are backed by PostgreSQL repositories. LLM inference is delegated to a local Ollama instance; semantic search is delegated to the external **shrike** service. Resources are ingested asynchronously via **Redpanda/Kafka**: the API enqueues events that the **worker** process consumes to fetch content and forward it to shrike for chunking, embedding, and vector indexing.
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  Clients (CLI, browser UI, other services)                       │
-│  Connect-RPC over HTTP/2 (grpc-web compatible)                   │
-└───────────────────────────┬──────────────────────────────────────┘
-                            │ :9000
-┌───────────────────────────▼──────────────────────────────────────┐
-│  cmd/api/main.go  –  http.ServeMux                               │
-│  CORS middleware wraps each route                                │
-│  /health  (plaintext liveness probe)                             │
-├──────────────────────────────────────────────────────────────────┤
-│  Connect-RPC Handlers (lib/greyseal/*/grpc/)                     │
-│  ┌──────────────┐  ┌─────────────────────────┐  ┌─────────────┐ │
-│  │ RoleHandler  │  │  ConversationHandler    │  │ResourceHdlr │ │
-│  │  (CRUD)      │  │  (CRUD + Chat + Feedbk) │  │  (CRUD)     │ │
-│  └──────┬───────┘  └────────────┬────────────┘  └──────┬──────┘ │
-│         │                       │                       │        │
-│  ┌──────▼───────┐  ┌────────────▼────────────┐  ┌──────▼──────┐ │
-│  │ RoleService  │  │  ConversationService    │  │ResourceSvc  │ │
-│  └──────┬───────┘  └─┬────┬────┬──────┬─────┘  └──────┬──────┘ │
-│         │           │    │    │      │                 │        │
-│      RoleRepo   ConvRepo Msg  Searcher Cache        ResourceRepo│
-│                        Repo    LLM                    Indexer   │
-└─────────┬───────────────┴────┴────────┴──────┬──────────┬───────┘
-          │                                     │          │
-       PostgreSQL                            shrike     Kafka
-                                            Ollama     (Redpanda)
+```mermaid
+graph TD
+  Client["Clients\nCLI · Browser · Other services"]
+  API["cmd/api :9000\nhttp.ServeMux · CORS · /health"]
+
+  Client -->|"Connect-RPC HTTP/2"| API
+
+  API --> RH["RoleHandler (CRUD)"] --> RS["RoleService"] --> RoleRepo["RoleRepo"]
+  API --> CH["ConversationHandler\nCRUD · Chat · Feedback"] --> CS["ConversationService"]
+  API --> RsH["ResourceHandler (CRUD)"] --> ResourceSvc["ResourceService"]
+
+  CS --> ConvRepo["ConvRepo · MessageRepo"]
+  CS -->|"hybrid search"| Shrike["shrike SearchService"]
+  CS -->|"streaming completion"| Ollama["Ollama LLM"]
+  CS --> Cache["Redis Cache\nper-conversation snippets"]
+  ResourceSvc --> ResourceRepo["ResourceRepo"]
+  ResourceSvc -->|"KafkaIndexer"| Kafka[("Kafka")]
+
+  RoleRepo --> PG[("PostgreSQL")]
+  ConvRepo --> PG
+  ResourceRepo --> PG
 ```
 
-```
-Async ingestion pipeline
-────────────────────────
-API: ResourceService.Ingest
-  │  SOURCE_TEXT   → Kafka: shrikev1.TextExtractedEvent  ──► shrike consumer
-  │  SOURCE_WEBSITE/PDF → Kafka: greysealv1.Resource ──► worker
-  └──────────────────────────────────────────────────────────────────────────
-Worker: kafka.Consumer[*greysealv1.Resource]
-  └─ FetchContent (HTTP scrape / PDF)
-       └─ Kafka: shrikev1.TextExtractedEvent  ──► shrike consumer
-                                                    (chunk → embed → Qdrant)
+```mermaid
+graph TD
+  subgraph ingest["Async Ingestion Pipeline"]
+    Ingest["ResourceService.Ingest"]
+    Ingest -->|"SOURCE_TEXT"| KTE["Kafka: shrikev1.TextExtractedEvent"]
+    Ingest -->|"SOURCE_WEBSITE / PDF"| KRes["Kafka: greysealv1.Resource"]
+
+    KRes --> Worker["cmd/worker\nFetchContent HTTP scrape / PDF"]
+    Worker -->|"text extracted"| KTE2["Kafka: shrikev1.TextExtractedEvent"]
+  end
+
+  KTE -->|"consumed by"| Shrike["Shrike\nchunk → embed → Qdrant"]
+  KTE2 -->|"consumed by"| Shrike
 ```
 
 ## Process Inventory
