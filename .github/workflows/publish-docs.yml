@@ -5,6 +5,7 @@ on:
     workflows: ["CI / Build and Publish Docker Images"]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,7 +14,7 @@ jobs:
   publish-docs:
     name: Publish Docs to joelholmes.dev
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout repository
@@ -24,6 +25,7 @@ jobs:
         with:
           repository: holmes89/joelholmes.dev
           path: site
+          token: ${{ secrets.GH_PAT }}
           ssh-key: ${{ secrets.SITE_DEPLOY_KEY }}
 
       - name: Set up buf
