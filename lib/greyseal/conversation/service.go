@@ -138,16 +138,21 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		return nil, fmt.Errorf("failed to load conversation: %w", err)
 	}
 
-	var llmMessages []LLMMessage
+	// Default system prompt establishes the assistant persona.
+	llmMessages := []LLMMessage{
+		{
+			Role: "system",
+			Content: "You are a helpful research assistant. When you use information from the provided context, " +
+				"reference it clearly so the user knows which sources informed your answer. " +
+				"Be concise, accurate, and cite sources when relevant.",
+		},
+	}
 
-	// 3. Load role system prompt if role_uuid is set
+	// 3. Load role system prompt if role_uuid is set — overrides the default.
 	if conv.RoleUuid != "" && srv.roleRepo != nil {
 		role, err := srv.roleRepo.Get(ctx, conv.RoleUuid)
 		if err == nil && role.SystemPrompt != "" {
-			llmMessages = append(llmMessages, LLMMessage{
-				Role:    "system",
-				Content: role.SystemPrompt,
-			})
+			llmMessages = []LLMMessage{{Role: "system", Content: role.SystemPrompt}}
 		}
 	}
 
@@ -188,10 +193,12 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	}
 
 	// 5. Retrieve relevant context from shrike (cache-first).
+	var usedResourceUUIDs []string
 	if contextSnippets := srv.contextSearch(ctx, conversationUUID, content, conv.ResourceUuids); len(contextSnippets) > 0 {
 		var parts []string
 		for i, r := range contextSnippets {
 			parts = append(parts, fmt.Sprintf("%d. [%s]: %s", i+1, r.Title, r.Snippet))
+			usedResourceUUIDs = append(usedResourceUUIDs, r.EntityUUID)
 		}
 		llmMessages = append(llmMessages, LLMMessage{
 			Role:    "system",
@@ -232,6 +239,7 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		ConversationUuid: conversationUUID,
 		Role:             greysealv1.MessageRole_MESSAGE_ROLE_ASSISTANT,
 		Content:          responseContent,
+		ResourceUuids:    usedResourceUUIDs,
 		CreatedAt:        timestamppb.New(time.Now()),
 	}
 	if err := srv.messageRepo.Create(ctx, assistantMsg); err != nil {
