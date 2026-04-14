@@ -192,18 +192,28 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		})
 	}
 
-	// 5. Retrieve relevant context from shrike (cache-first).
+	// 5. Retrieve relevant context from shrike.
 	var usedResourceUUIDs []string
-	if contextSnippets := srv.contextSearch(ctx, conversationUUID, content, conv.ResourceUuids); len(contextSnippets) > 0 {
+	contextSnippets := srv.contextSearch(ctx, conversationUUID, content, conv.ResourceUuids)
+	if len(contextSnippets) > 0 {
 		var parts []string
 		for i, r := range contextSnippets {
 			parts = append(parts, fmt.Sprintf("%d. [%s]: %s", i+1, r.Title, r.Snippet))
 			usedResourceUUIDs = append(usedResourceUUIDs, r.EntityUUID)
 		}
+		srv.logger.Info("injecting context into prompt",
+			zap.String("conversation_uuid", conversationUUID),
+			zap.Int("snippet_count", len(contextSnippets)),
+			zap.Strings("entity_uuids", usedResourceUUIDs),
+		)
 		llmMessages = append(llmMessages, LLMMessage{
 			Role:    "system",
 			Content: "Here is relevant context:\n" + strings.Join(parts, "\n"),
 		})
+	} else {
+		srv.logger.Info("no context snippets found, proceeding without RAG context",
+			zap.String("conversation_uuid", conversationUUID),
+		)
 	}
 
 	// 6. Add message history
@@ -260,32 +270,59 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 }
 
 // contextSearch retrieves relevant snippets for the given query and resource scope.
-// It checks the per-conversation Redis cache first; on a miss it calls shrike and
-// populates the cache with the results.
+// Cache is temporarily disabled to verify Shrike is returning correct per-query results.
+// TODO: re-enable cache once correctness is confirmed. Note that the cache must be keyed
+// by (conversationUUID + queryHash) rather than conversationUUID alone, otherwise every
+// turn after the first returns stale snippets from the original query.
 func (srv *conversationService) contextSearch(ctx context.Context, conversationUUID, query string, resourceUUIDs []string) []SearchResult {
-	if srv.cache != nil {
-		if cached, err := srv.cache.List(ctx, conversationUUID); err == nil && len(cached) > 0 {
-			results := make([]SearchResult, len(cached))
-			for i, c := range cached {
-				results[i] = SearchResult(c)
-			}
-			return results
-		}
-	}
+	srv.logger.Info("context search starting",
+		zap.String("conversation_uuid", conversationUUID),
+		zap.Strings("resource_uuids", resourceUUIDs),
+		zap.Int("resource_uuids_count", len(resourceUUIDs)),
+	)
+
+	// TODO: restore cache after fixing the keying strategy (see comment above).
+	// if srv.cache != nil {
+	// 	if cached, err := srv.cache.List(ctx, conversationUUID); err == nil && len(cached) > 0 {
+	// 		srv.logger.Info("context search cache hit", zap.String("conversation_uuid", conversationUUID), zap.Int("count", len(cached)))
+	// 		results := make([]SearchResult, len(cached))
+	// 		for i, c := range cached {
+	// 			results[i] = SearchResult(c)
+	// 		}
+	// 		return results
+	// 	}
+	// }
+
 	if srv.searcher == nil {
+		srv.logger.Warn("context search skipped: searcher not configured")
 		return nil
 	}
+
 	results, err := srv.searcher.Search(ctx, query, 5, resourceUUIDs)
-	if err != nil || len(results) == 0 {
+	if err != nil {
+		srv.logger.Error("shrike search failed",
+			zap.String("conversation_uuid", conversationUUID),
+			zap.Error(err),
+		)
 		return nil
 	}
-	if srv.cache != nil {
-		cached := make([]CachedResource, len(results))
-		for i, r := range results {
-			cached[i] = CachedResource(r)
-		}
-		_ = srv.cache.Merge(ctx, conversationUUID, cached)
+	srv.logger.Info("shrike search completed",
+		zap.String("conversation_uuid", conversationUUID),
+		zap.Int("results_count", len(results)),
+	)
+	if len(results) == 0 {
+		return nil
 	}
+
+	// TODO: restore cache write once keying strategy is fixed.
+	// if srv.cache != nil {
+	// 	cached := make([]CachedResource, len(results))
+	// 	for i, r := range results {
+	// 		cached[i] = CachedResource(r)
+	// 	}
+	// 	_ = srv.cache.Merge(ctx, conversationUUID, cached)
+	// }
+
 	return results
 }
 
