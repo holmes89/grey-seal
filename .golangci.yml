@@ -9,7 +9,6 @@ linters:
     - staticcheck
     - misspell
     - unused
-    - deadcode
   exclusions:
     rules:
       - path: lib/schemas/
@@ -17,7 +16,6 @@ linters:
         - errcheck
         - unused
         - staticcheck
-        - deadcode
       - path: _test\.go
         linters:
         - errcheck
