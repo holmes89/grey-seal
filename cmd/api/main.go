@@ -20,6 +20,7 @@ import (
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/holmes89/grey-seal/lib/repo/cache"
 	"github.com/holmes89/grey-seal/lib/repo/ollama"
+	"github.com/holmes89/grey-seal/lib/repo/transcript"
 	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
 	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1/services"
 	shrikeconnect "github.com/holmes89/shrike/lib/schemas/shrike/v1/services/servicesv1connect"
@@ -87,6 +88,17 @@ func main() {
 	// Conversation service
 	convRepo := repo.NewConversationRepo(store)
 	messageRepo := &repo.MessageRepo{Conn: store}
+	var transcriptWriter conversationsvc.TranscriptWriter
+	if dir := os.Getenv("TRANSCRIPT_DIR"); dir != "" {
+		tw, err := transcript.NewWriter(dir)
+		if err != nil {
+			logger.Warn("failed to create transcript writer", zap.Error(err))
+		} else {
+			transcriptWriter = tw
+			logger.Info("transcript writer enabled", zap.String("dir", dir))
+		}
+	}
+
 	convSvc := conversationsvc.NewConversationService(
 		convRepo,
 		messageRepo,
@@ -95,6 +107,7 @@ func main() {
 		ollamaLLM,
 		resourceCache,
 		logger,
+		transcriptWriter,
 	)
 	convPath, convHandler := servicesconnect.NewConversationServiceHandler(conversationgrpc.NewConversationHandler(convSvc))
 	logger.Info("registering conversation service route", zap.String("path", convPath))

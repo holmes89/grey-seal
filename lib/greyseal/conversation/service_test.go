@@ -31,7 +31,7 @@ func (s *ConversationServiceTestSuite) SetupTest() {
 	s.roleRepo = mocks.NewMockRoleRepository(s.T())
 	s.llm = mocks.NewMockLLM(s.T())
 	// nil cache — tests that need it create their own service instance
-	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, nil, zap.NewNop())
+	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, nil, zap.NewNop(), nil)
 }
 
 func (s *ConversationServiceTestSuite) TestList() {
@@ -207,7 +207,7 @@ func (s *ConversationServiceTestSuite) TestChat_CacheHit() {
 	s.T().Skip("cache temporarily disabled — re-enable after fixing per-query keying strategy")
 	cache := mocks.NewMockResourceCache(s.T())
 	svc := conversation.NewConversationService(
-		s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, cache, zap.NewNop(),
+		s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, cache, zap.NewNop(), nil,
 	)
 
 	convUUID := "conv-cache-hit"
@@ -240,7 +240,7 @@ func (s *ConversationServiceTestSuite) TestChat_CacheMiss() {
 	s.T().Skip("cache temporarily disabled — re-enable after fixing per-query keying strategy")
 	cache := mocks.NewMockResourceCache(s.T())
 	svc := conversation.NewConversationService(
-		s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, cache, zap.NewNop(),
+		s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, cache, zap.NewNop(), nil,
 	)
 
 	convUUID := "conv-cache-miss"

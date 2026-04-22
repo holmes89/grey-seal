@@ -30,10 +30,11 @@ type LLMMessage struct {
 type conversationService struct {
 	conversationRepo base.Repository[*greysealv1.Conversation]
 	messageRepo      MessageRepository
-	searcher         Searcher       // optional
-	roleRepo         RoleRepository // optional
-	llm              LLM            // optional
-	cache            ResourceCache  // optional; disables per-conversation snippet caching when nil
+	searcher         Searcher         // optional
+	roleRepo         RoleRepository   // optional
+	llm              LLM              // optional
+	cache            ResourceCache    // optional; disables per-conversation snippet caching when nil
+	transcriptWriter TranscriptWriter // optional; nil = no transcript
 	logger           *zap.Logger
 }
 
@@ -45,6 +46,7 @@ func NewConversationService(
 	llm LLM,
 	cache ResourceCache,
 	logger *zap.Logger,
+	transcriptWriter TranscriptWriter,
 ) ConversationService {
 	return &conversationService{
 		conversationRepo: conversationRepo,
@@ -53,6 +55,7 @@ func NewConversationService(
 		roleRepo:         roleRepo,
 		llm:              llm,
 		cache:            cache,
+		transcriptWriter: transcriptWriter,
 		logger:           logger,
 	}
 }
@@ -139,20 +142,17 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	}
 
 	// Default system prompt establishes the assistant persona.
-	llmMessages := []LLMMessage{
-		{
-			Role: "system",
-			Content: "You are a helpful research assistant. When you use information from the provided context, " +
-				"reference it clearly so the user knows which sources informed your answer. " +
-				"Be concise, accurate, and cite sources when relevant.",
-		},
-	}
+	systemPromptText := "You are a helpful research assistant. When you use information from the provided context, " +
+		"reference it clearly so the user knows which sources informed your answer. " +
+		"Be concise, accurate, and cite sources when relevant."
+	llmMessages := []LLMMessage{{Role: "system", Content: systemPromptText}}
 
 	// 3. Load role system prompt if role_uuid is set — overrides the default.
 	if conv.RoleUuid != "" && srv.roleRepo != nil {
 		role, err := srv.roleRepo.Get(ctx, conv.RoleUuid)
 		if err == nil && role.SystemPrompt != "" {
-			llmMessages = []LLMMessage{{Role: "system", Content: role.SystemPrompt}}
+			systemPromptText = role.SystemPrompt
+			llmMessages = []LLMMessage{{Role: "system", Content: systemPromptText}}
 		}
 	}
 
@@ -254,6 +254,32 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	}
 	if err := srv.messageRepo.Create(ctx, assistantMsg); err != nil {
 		return nil, fmt.Errorf("failed to save assistant message: %w", err)
+	}
+
+	// Write transcript turn (optional; failures are non-fatal).
+	if srv.transcriptWriter != nil {
+		llmMsgs := make([]LLMMessage, len(llmMessages))
+		copy(llmMsgs, llmMessages)
+		turn := TranscriptTurn{
+			ConversationUUID:    conversationUUID,
+			TurnIndex:           len(history) + 1,
+			Timestamp:           time.Now(),
+			UserMessage:         content,
+			SystemPrompt:        systemPromptText,
+			ConversationSummary: summaryText,
+			HistoryDepth:        len(history),
+			SearchQuery:         content,
+			SearchResults:       contextSnippets,
+			AssembledMessages:   llmMsgs,
+			Response:            responseContent,
+			ResourceUUIDs:       usedResourceUUIDs,
+		}
+		if err := srv.transcriptWriter.WriteTurn(ctx, turn); err != nil {
+			srv.logger.Warn("failed to write transcript",
+				zap.String("conversation_uuid", conversationUUID),
+				zap.Error(err),
+			)
+		}
 	}
 
 	// Update conversation updated_at (preserve all existing fields).

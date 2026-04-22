@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"time"
 
 	"github.com/holmes89/archaea/base"
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
@@ -78,4 +79,25 @@ type CachedResource struct {
 type ResourceCache interface {
 	Merge(ctx context.Context, conversationUUID string, resources []CachedResource) error
 	List(ctx context.Context, conversationUUID string) ([]CachedResource, error)
+}
+
+// TranscriptTurn captures the full context of one user→assistant exchange.
+type TranscriptTurn struct {
+	ConversationUUID    string
+	TurnIndex           int
+	Timestamp           time.Time
+	UserMessage         string
+	SystemPrompt        string
+	ConversationSummary string
+	HistoryDepth        int
+	SearchQuery         string
+	SearchResults       []SearchResult
+	AssembledMessages   []LLMMessage
+	Response            string
+	ResourceUUIDs       []string
+}
+
+// TranscriptWriter persists a TranscriptTurn for offline review.
+type TranscriptWriter interface {
+	WriteTurn(ctx context.Context, turn TranscriptTurn) error
 }
