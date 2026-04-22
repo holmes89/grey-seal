@@ -60,7 +60,7 @@ func (w *Writer) WriteTurn(ctx context.Context, turn conversation.TranscriptTurn
 	rc, err := w.bucket.NewReader(ctx, key, nil)
 	if err == nil {
 		existing, _ = io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 	}
 
 	var sb strings.Builder
