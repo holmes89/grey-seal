@@ -16,10 +16,11 @@ import (
 type LLM struct {
 	host   string
 	model  string
+	think  bool
 	client *http.Client
 }
 
-// NewLLM creates an LLM using OLLAMA_HOST and OLLAMA_CHAT_MODEL env vars.
+// NewLLM creates an LLM using OLLAMA_HOST, OLLAMA_CHAT_MODEL, and OLLAMA_THINK env vars.
 func NewLLM() *LLM {
 	host := os.Getenv("OLLAMA_HOST")
 	if host == "" {
@@ -32,6 +33,7 @@ func NewLLM() *LLM {
 	return &LLM{
 		host:   host,
 		model:  model,
+		think:  os.Getenv("OLLAMA_THINK") == "true",
 		client: &http.Client{},
 	}
 }
@@ -45,6 +47,7 @@ type chatRequest struct {
 	Model    string          `json:"model"`
 	Messages []ollamaMessage `json:"messages"`
 	Stream   bool            `json:"stream"`
+	Think    bool            `json:"think"`
 }
 
 type chatChunk struct {
@@ -69,6 +72,7 @@ func (l *LLM) Chat(ctx context.Context, messages []conversation.LLMMessage, stre
 		Model:    l.model,
 		Messages: ollamaMsgs,
 		Stream:   true,
+		Think:    l.think,
 	}
 
 	data, err := json.Marshal(reqBody)
