@@ -12,7 +12,9 @@ FROM deps AS build
 ADD cmd ./cmd
 ADD lib ./lib
 ADD main.go ./
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o api cmd/api/*.go
+ARG GIT_HASH=unknown
+ARG BUILD_TIME=unknown
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.commit=${GIT_HASH} -X main.buildTime=${BUILD_TIME}" -o api cmd/api/*.go
 
 FROM scratch
 COPY --from=deps /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/

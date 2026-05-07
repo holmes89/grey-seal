@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -25,6 +26,11 @@ import (
 	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
 	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1/services"
 	shrikeconnect "github.com/holmes89/shrike/lib/schemas/shrike/v1/services/servicesv1connect"
+)
+
+var (
+	commit    = "dev"
+	buildTime = "unknown"
 )
 
 func main() {
@@ -127,7 +133,15 @@ func main() {
 	srv.Handle(convPath, convHandler)
 
 	srv.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok")) //nolint:errcheck
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"status":"ok"}`) //nolint:errcheck
+	})
+
+	srv.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"service":%q,"commit":%q,"build_time":%q}`, //nolint:errcheck
+			"grey-seal", commit, buildTime)
 	})
 
 	if err := srv.Run(ctx); err != nil {
