@@ -9,6 +9,10 @@ import (
 
 	"github.com/holmes89/archaea/kafka"
 	"github.com/holmes89/archaea/worker"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	"go.uber.org/zap"
 	"github.com/holmes89/grey-seal/lib/greyseal/resource"
 	"github.com/holmes89/grey-seal/lib/repo"
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
@@ -20,6 +24,16 @@ import (
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	logger, _ := zap.NewProduction()
+	defer logger.Sync() //nolint:errcheck
+
+	shutdown, err := initOTel(ctx, "grey-seal-worker", logger)
+	if err != nil {
+		logger.Warn("failed to initialize OTel", zap.Error(err))
+	} else {
+		defer shutdown(ctx)
+	}
 
 	dbURL := os.Getenv("DATABASE_URL")
 	store, err := repo.NewDatabase(dbURL)
@@ -67,16 +81,30 @@ func processResources(
 	producer *kafka.Producer[*shrikev1.TextExtractedEvent],
 	resourceRepo *repo.ResourceRepo,
 ) {
+	meter := otel.Meter("grey-seal/resource-consumer")
+	msgDuration, _ := meter.Float64Histogram("kafka.consumer.message.duration",
+		metric.WithDescription("Duration of Kafka message processing in seconds"),
+		metric.WithUnit("s"),
+	)
+	tracer := otel.Tracer("grey-seal/resource-consumer")
+
 	for r := range consumer.Read() {
-		ctx := context.Background()
+		start := time.Now()
+		ctx, span := tracer.Start(context.Background(), "resource.consume")
+		result := "ok"
 
 		content, err := resource.FetchContent(ctx, r)
 		if err != nil {
 			log.Printf("worker: failed to fetch content for resource %s: %v", r.Uuid, err)
+			result = "error"
+			msgDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(attribute.String("result", result)))
+			span.End()
 			continue
 		}
 		if content == "" {
 			log.Printf("worker: empty content for resource %s, skipping", r.Uuid)
+			msgDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(attribute.String("result", result)))
+			span.End()
 			continue
 		}
 
@@ -90,6 +118,9 @@ func processResources(
 		}
 		if err := producer.Publish(ctx, event, r.Uuid, time.Now()); err != nil {
 			log.Printf("worker: failed to publish TextExtractedEvent for resource %s: %v", r.Uuid, err)
+			result = "error"
+			msgDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(attribute.String("result", result)))
+			span.End()
 			continue
 		}
 
@@ -99,5 +130,7 @@ func processResources(
 		}
 
 		log.Printf("worker: resource %s queued for shrike indexing (%d chars)", r.Uuid, len(content))
+		msgDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributes(attribute.String("result", result)))
+		span.End()
 	}
 }

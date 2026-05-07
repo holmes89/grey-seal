@@ -9,6 +9,7 @@ import (
 	"github.com/holmes89/archaea/server"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
 	conversationsvc "github.com/holmes89/grey-seal/lib/greyseal/conversation"
@@ -57,6 +58,18 @@ func main() {
 	searcher := &shrikeSearcher{client: shrikeClient}
 
 	srv := server.New(":9000",
+		func(h http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				sc := trace.SpanFromContext(r.Context()).SpanContext()
+				logger.Info("request",
+					zap.String("method", r.Method),
+					zap.String("path", r.URL.Path),
+					zap.String("trace_id", sc.TraceID().String()),
+					zap.String("span_id", sc.SpanID().String()),
+				)
+				h.ServeHTTP(w, r)
+			})
+		},
 		func(h http.Handler) http.Handler { return otelhttp.NewHandler(h, "grey-seal") },
 	)
 
