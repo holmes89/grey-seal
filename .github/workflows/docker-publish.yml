@@ -80,6 +80,10 @@ jobs:
             type=sha
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
+      - name: Set build timestamp
+        id: build-ts
+        run: echo "value=$(date -u +%FT%TZ)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -92,3 +96,6 @@ jobs:
             gh_pat=${{ secrets.GH_PAT }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          build-args: |
+            GIT_HASH=${{ github.sha }}
+            BUILD_TIME=${{ steps.build-ts.outputs.value }}
