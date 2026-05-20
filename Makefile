@@ -1,4 +1,4 @@
-.PHONY: test test-integration test-e2e test-all lint vet generate build coverage coverage-integration coverage-html coverage-html-integration deadcode
+.PHONY: test test-integration test-e2e test-all lint vet generate build coverage coverage-integration coverage-html coverage-html-integration deadcode hooks
 
 test:
 	go test -race ./...
@@ -42,3 +42,7 @@ coverage-html-integration: coverage-integration
 
 deadcode:
 	go run golang.org/x/tools/cmd/deadcode@latest -test ./...
+
+hooks:
+	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-commit .githooks/pre-push

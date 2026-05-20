@@ -105,3 +105,18 @@ lib/
   ui/             – go-app UI pages and components (build-tagged ignore)
 schemas/          – Protobuf source files
 ```
+
+## Development Setup
+
+### Git Hooks
+
+This repo ships pre-commit and pre-push hooks in `.githooks/`.
+
+- **pre-commit**: runs `go vet` and `golangci-lint` before every commit
+- **pre-push**: runs `go test -race ./...` before every push
+
+Install once per checkout:
+
+```sh
+make hooks
+```
