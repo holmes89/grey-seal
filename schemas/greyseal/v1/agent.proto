@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package schemas.greyseal.v1;
+
+
+import "google/protobuf/timestamp.proto";
+
+// AgentRun is the persisted state of one agentic coding-task run.
+message AgentRun {
+  string uuid = 1;
+
+  // provider: "claude" (Managed Agents) — the only implemented value in
+  // Phase 1. "ollama:<model>" is a reserved, not-yet-implemented value.
+  string provider = 2;
+
+  string repo_url = 3;
+
+  // status: "running" | "idle" | "terminated" | "error".
+  string status = 4;
+
+  // session_id is the provider's session identifier — for Claude this is a
+  // Managed Agents session ID, usable to build a Console trace-view link.
+  string session_id = 5;
+
+  // pr_url is populated once the agent opens a pull request, if it does.
+  string pr_url = 6;
+
+  // error holds a human-readable failure reason when status is "error".
+  string error = 7;
+
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}

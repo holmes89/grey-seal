@@ -15,6 +15,13 @@ services:
       OLLAMA_HOST: "http://ollama:11434"
       OLLAMA_EMBED_MODEL: "all-minilm"
       OLLAMA_CHAT_MODEL: "deepseek-r1"
+      # Agent service (Managed Agents / Claude) — leave unset to disable the
+      # route. ANTHROPIC_API_KEY should be exported in the shell/.env, never
+      # committed here. AGENT_ID/ENVIRONMENT_ID come from `go run
+      # ./cmd/setup-agent` (run once).
+      ANTHROPIC_API_KEY: ""
+      AGENT_ID: ""
+      ENVIRONMENT_ID: ""
     ports:
       - 9000:9000
     networks:

@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package schemas.greyseal.services.v1;
+
+
+import "schemas/greyseal/v1/agent.proto";
+
+service AgentService {
+  // RunAgentTask starts a new agentic coding-task run and returns
+  // immediately with its initial state; the run continues asynchronously on
+  // the provider's side.
+  rpc RunAgentTask(RunAgentTaskRequest) returns (RunAgentTaskResponse) {}
+
+  // GetAgentRun returns the current state of a previously started run.
+  rpc GetAgentRun(GetAgentRunRequest) returns (GetAgentRunResponse) {}
+
+  // StreamAgentRun streams events for a run as they occur, until the run
+  // reaches a terminal status.
+  rpc StreamAgentRun(StreamAgentRunRequest) returns (stream AgentRunEvent) {}
+}
+
+message RunAgentTaskRequest {
+  // provider: "claude" (only implemented value); "ollama:<model>" reserved.
+  string provider = 1;
+  string repo_url = 2;
+  // github_token authorizes cloning (and, for Claude, opening a PR against)
+  // repo_url. Never persisted — used only to start the provider session.
+  string github_token = 3;
+  // branch to check out; defaults to the repository's default branch.
+  string branch = 4;
+  // task_description is what the agent should do.
+  string task_description = 5;
+  // rubric is the grading criteria for the provider's outcome-graded loop,
+  // e.g. "go build ./... succeeds, go test ./... passes, no
+  // TODO(agent) markers remain".
+  string rubric = 6;
+}
+
+message RunAgentTaskResponse {
+  schemas.greyseal.v1.AgentRun data = 1;
+}
+
+message GetAgentRunRequest {
+  string uuid = 1;
+}
+
+message GetAgentRunResponse {
+  schemas.greyseal.v1.AgentRun data = 1;
+}
+
+message StreamAgentRunRequest {
+  string uuid = 1;
+}
+
+// AgentRunEvent is one relayed event from a running agent session.
+message AgentRunEvent {
+  // type: the provider event type, e.g. "agent.message", "agent.tool_use",
+  // "session.status_idle", "session.status_terminated".
+  string type = 1;
+  // message is human-readable text for message/tool-use events.
+  string message = 2;
+  // status is populated on status-change events: "running" | "idle" |
+  // "terminated" | "error".
+  string status = 3;
+}
