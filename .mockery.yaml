@@ -2,6 +2,16 @@ quiet: false
 disable-version-string: false
 with-expecter: false
 packages:
+  github.com/holmes89/grey-seal/lib/greyseal/agent:
+    config:
+      dir: "lib/greyseal/agent/mocks"
+      outpkg: "mocks"
+      mockname: "Mock{{.InterfaceName}}"
+      filename: "mock_{{.InterfaceName | lower}}.go"
+    interfaces:
+      AgentService:
+      AgentRunRepository:
+      SessionRunner:
   github.com/holmes89/grey-seal/lib/greyseal/conversation:
     config:
       dir: "lib/greyseal/conversation/mocks"

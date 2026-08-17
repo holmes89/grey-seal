@@ -3,6 +3,9 @@
 
 ## Table of Contents
 
+- [schemas/greyseal/v1/agent.proto](#schemas_greyseal_v1_agent-proto)
+    - [AgentRun](#schemas-greyseal-v1-AgentRun)
+  
 - [schemas/greyseal/v1/conversation.proto](#schemas_greyseal_v1_conversation-proto)
     - [Conversation](#schemas-greyseal-v1-Conversation)
     - [Message](#schemas-greyseal-v1-Message)
@@ -16,6 +19,16 @@
   
 - [schemas/greyseal/v1/role.proto](#schemas_greyseal_v1_role-proto)
     - [Role](#schemas-greyseal-v1-Role)
+  
+- [schemas/greyseal/v1/services/agent.proto](#schemas_greyseal_v1_services_agent-proto)
+    - [AgentRunEvent](#schemas-greyseal-services-v1-AgentRunEvent)
+    - [GetAgentRunRequest](#schemas-greyseal-services-v1-GetAgentRunRequest)
+    - [GetAgentRunResponse](#schemas-greyseal-services-v1-GetAgentRunResponse)
+    - [RunAgentTaskRequest](#schemas-greyseal-services-v1-RunAgentTaskRequest)
+    - [RunAgentTaskResponse](#schemas-greyseal-services-v1-RunAgentTaskResponse)
+    - [StreamAgentRunRequest](#schemas-greyseal-services-v1-StreamAgentRunRequest)
+  
+    - [AgentService](#schemas-greyseal-services-v1-AgentService)
   
 - [schemas/greyseal/v1/services/conversation.proto](#schemas_greyseal_v1_services_conversation-proto)
     - [ChatRequest](#schemas-greyseal-services-v1-ChatRequest)
@@ -62,6 +75,45 @@
     - [RoleService](#schemas-greyseal-services-v1-RoleService)
   
 - [Scalar Value Types](#scalar-value-types)
+
+
+
+<a name="schemas_greyseal_v1_agent-proto"></a>
+<p align="right"><a href="#top">Top</a></p>
+
+## schemas/greyseal/v1/agent.proto
+
+
+
+<a name="schemas-greyseal-v1-AgentRun"></a>
+
+### AgentRun
+AgentRun is the persisted state of one agentic coding-task run.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| uuid | [string](#string) |  |  |
+| provider | [string](#string) |  | provider: &#34;claude&#34; (Managed Agents) — the only implemented value in Phase 1. &#34;ollama:&lt;model&gt;&#34; is a reserved, not-yet-implemented value. |
+| repo_url | [string](#string) |  |  |
+| status | [string](#string) |  | status: &#34;running&#34; | &#34;idle&#34; | &#34;terminated&#34; | &#34;error&#34;. |
+| session_id | [string](#string) |  | session_id is the provider&#39;s session identifier — for Claude this is a Managed Agents session ID, usable to build a Console trace-view link. |
+| pr_url | [string](#string) |  | pr_url is populated once the agent opens a pull request, if it does. |
+| error | [string](#string) |  | error holds a human-readable failure reason when status is &#34;error&#34;. |
+| created_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+| updated_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  |  |
+
+
+
+
+
+ 
+
+ 
+
+ 
+
+ 
 
 
 
@@ -220,6 +272,131 @@ means no system prompt is applied.
  
 
  
+
+ 
+
+
+
+<a name="schemas_greyseal_v1_services_agent-proto"></a>
+<p align="right"><a href="#top">Top</a></p>
+
+## schemas/greyseal/v1/services/agent.proto
+
+
+
+<a name="schemas-greyseal-services-v1-AgentRunEvent"></a>
+
+### AgentRunEvent
+AgentRunEvent is one relayed event from a running agent session.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| type | [string](#string) |  | type: the provider event type, e.g. &#34;agent.message&#34;, &#34;agent.tool_use&#34;, &#34;session.status_idle&#34;, &#34;session.status_terminated&#34;. |
+| message | [string](#string) |  | message is human-readable text for message/tool-use events. |
+| status | [string](#string) |  | status is populated on status-change events: &#34;running&#34; | &#34;idle&#34; | &#34;terminated&#34; | &#34;error&#34;. |
+
+
+
+
+
+
+<a name="schemas-greyseal-services-v1-GetAgentRunRequest"></a>
+
+### GetAgentRunRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| uuid | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="schemas-greyseal-services-v1-GetAgentRunResponse"></a>
+
+### GetAgentRunResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| data | [schemas.greyseal.v1.AgentRun](#schemas-greyseal-v1-AgentRun) |  |  |
+
+
+
+
+
+
+<a name="schemas-greyseal-services-v1-RunAgentTaskRequest"></a>
+
+### RunAgentTaskRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| provider | [string](#string) |  | provider: &#34;claude&#34; (only implemented value); &#34;ollama:&lt;model&gt;&#34; reserved. |
+| repo_url | [string](#string) |  |  |
+| github_token | [string](#string) |  | github_token authorizes cloning (and, for Claude, opening a PR against) repo_url. Never persisted — used only to start the provider session. |
+| branch | [string](#string) |  | branch to check out; defaults to the repository&#39;s default branch. |
+| task_description | [string](#string) |  | task_description is what the agent should do. |
+| rubric | [string](#string) |  | rubric is the grading criteria for the provider&#39;s outcome-graded loop, e.g. &#34;go build ./... succeeds, go test ./... passes, no TODO(agent) markers remain&#34;. |
+
+
+
+
+
+
+<a name="schemas-greyseal-services-v1-RunAgentTaskResponse"></a>
+
+### RunAgentTaskResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| data | [schemas.greyseal.v1.AgentRun](#schemas-greyseal-v1-AgentRun) |  |  |
+
+
+
+
+
+
+<a name="schemas-greyseal-services-v1-StreamAgentRunRequest"></a>
+
+### StreamAgentRunRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| uuid | [string](#string) |  |  |
+
+
+
+
+
+ 
+
+ 
+
+ 
+
+
+<a name="schemas-greyseal-services-v1-AgentService"></a>
+
+### AgentService
+
+
+| Method Name | Request Type | Response Type | Description |
+| ----------- | ------------ | ------------- | ------------|
+| RunAgentTask | [RunAgentTaskRequest](#schemas-greyseal-services-v1-RunAgentTaskRequest) | [RunAgentTaskResponse](#schemas-greyseal-services-v1-RunAgentTaskResponse) | RunAgentTask starts a new agentic coding-task run and returns immediately with its initial state; the run continues asynchronously on the provider&#39;s side. |
+| GetAgentRun | [GetAgentRunRequest](#schemas-greyseal-services-v1-GetAgentRunRequest) | [GetAgentRunResponse](#schemas-greyseal-services-v1-GetAgentRunResponse) | GetAgentRun returns the current state of a previously started run. |
+| StreamAgentRun | [StreamAgentRunRequest](#schemas-greyseal-services-v1-StreamAgentRunRequest) | [AgentRunEvent](#schemas-greyseal-services-v1-AgentRunEvent) stream | StreamAgentRun streams events for a run as they occur, until the run reaches a terminal status. |
 
  
 

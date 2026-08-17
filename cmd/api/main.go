@@ -13,6 +13,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
+	agentsvc "github.com/holmes89/grey-seal/lib/greyseal/agent"
+	agentgrpc "github.com/holmes89/grey-seal/lib/greyseal/agent/grpc"
 	conversationsvc "github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	conversationgrpc "github.com/holmes89/grey-seal/lib/greyseal/conversation/grpc"
 	resourcesvc "github.com/holmes89/grey-seal/lib/greyseal/resource"
@@ -21,6 +23,7 @@ import (
 	rolegrpc "github.com/holmes89/grey-seal/lib/greyseal/role/grpc"
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/holmes89/grey-seal/lib/repo/cache"
+	"github.com/holmes89/grey-seal/lib/repo/managedagents"
 	"github.com/holmes89/grey-seal/lib/repo/ollama"
 	"github.com/holmes89/grey-seal/lib/repo/transcript"
 	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
@@ -131,6 +134,20 @@ func main() {
 	convPath, convHandler := servicesconnect.NewConversationServiceHandler(conversationgrpc.NewConversationHandler(convSvc))
 	logger.Info("registering conversation service route", zap.String("path", convPath))
 	srv.Handle(convPath, convHandler)
+
+	// Agent service (Managed Agents / Claude); requires the one-time
+	// provisioning done by cmd/setup-agent. Route is skipped entirely if
+	// unconfigured, rather than registered in a broken state.
+	if agentID, envID := os.Getenv("AGENT_ID"), os.Getenv("ENVIRONMENT_ID"); agentID != "" && envID != "" {
+		agentRunRepo := &repo.AgentRunRepo{Conn: store}
+		runner := managedagents.NewSessionRunner(agentID, envID)
+		agentSvc := agentsvc.NewAgentService(runner, agentRunRepo, logger)
+		agentPath, agentHandler := servicesconnect.NewAgentServiceHandler(agentgrpc.NewAgentHandler(agentSvc))
+		logger.Info("registering agent service route", zap.String("path", agentPath))
+		srv.Handle(agentPath, agentHandler)
+	} else {
+		logger.Warn("AGENT_ID/ENVIRONMENT_ID not set — agent service route disabled; run cmd/setup-agent to provision them")
+	}
 
 	srv.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
