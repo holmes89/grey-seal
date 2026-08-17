@@ -23,6 +23,7 @@ import (
 	rolegrpc "github.com/holmes89/grey-seal/lib/greyseal/role/grpc"
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/holmes89/grey-seal/lib/repo/cache"
+	"github.com/holmes89/grey-seal/lib/repo/github"
 	"github.com/holmes89/grey-seal/lib/repo/managedagents"
 	"github.com/holmes89/grey-seal/lib/repo/ollama"
 	"github.com/holmes89/grey-seal/lib/repo/transcript"
@@ -141,7 +142,8 @@ func main() {
 	if agentID, envID := os.Getenv("AGENT_ID"), os.Getenv("ENVIRONMENT_ID"); agentID != "" && envID != "" {
 		agentRunRepo := &repo.AgentRunRepo{Conn: store}
 		runner := managedagents.NewSessionRunner(agentID, envID)
-		agentSvc := agentsvc.NewAgentService(runner, agentRunRepo, logger)
+		prOpener := github.NewClient()
+		agentSvc := agentsvc.NewAgentService(runner, agentRunRepo, prOpener, logger)
 		agentPath, agentHandler := servicesconnect.NewAgentServiceHandler(agentgrpc.NewAgentHandler(agentSvc))
 		logger.Info("registering agent service route", zap.String("path", agentPath))
 		srv.Handle(agentPath, agentHandler)

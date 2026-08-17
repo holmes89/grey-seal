@@ -63,13 +63,36 @@ type SessionRunner interface {
 	StartSession(ctx context.Context, req RunAgentTaskRequest) (sessionID string, err error)
 
 	// GetSessionStatus returns the live status ("running"|"idle"|"terminated")
-	// of an existing session, and its PR URL if the agent has reported one.
-	GetSessionStatus(ctx context.Context, sessionID string) (status string, prURL string, err error)
+	// of an existing session, plus its most recent outcome-evaluation result
+	// ("" if no outcome has been defined yet; otherwise one of
+	// "pending"/"running"/"evaluating"/"satisfied"/"max_iterations_reached"/
+	// "failed"/"interrupted").
+	GetSessionStatus(ctx context.Context, sessionID string) (status string, outcomeResult string, err error)
 
 	// StreamSession relays events for an existing session. The callback is
 	// invoked once per event; returning an error aborts streaming. Returns
 	// once the session reaches a terminal status or ctx is canceled.
 	StreamSession(ctx context.Context, sessionID string, stream func(event AgentRunEvent) error) error
+}
+
+// OpenPullRequestRequest describes a PR to open once an agent run's outcome
+// is satisfied.
+type OpenPullRequestRequest struct {
+	RepoURL string
+	Branch  string
+	Base    string
+	Title   string
+	Body    string
+	// Token authorizes the PR creation call. Never persisted — held only in
+	// memory for the run's lifetime by whoever calls OpenPullRequest.
+	Token string
+}
+
+// PullRequestOpener opens a pull request directly via the hosting
+// provider's API (GitHub REST) — deliberately not via an agent-invoked MCP
+// tool, so no MCP server/vault wiring is required.
+type PullRequestOpener interface {
+	OpenPullRequest(ctx context.Context, req OpenPullRequestRequest) (prURL string, err error)
 }
 
 var _ base.Entity = (*greysealv1.AgentRun)(nil)

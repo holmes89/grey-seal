@@ -16,15 +16,17 @@ import (
 
 type AgentServiceTestSuite struct {
 	suite.Suite
-	runner *mocks.MockSessionRunner
-	repo   *mocks.MockAgentRunRepository
-	svc    agent.AgentService
+	runner   *mocks.MockSessionRunner
+	repo     *mocks.MockAgentRunRepository
+	prOpener *mocks.MockPullRequestOpener
+	svc      agent.AgentService
 }
 
 func (s *AgentServiceTestSuite) SetupTest() {
 	s.runner = mocks.NewMockSessionRunner(s.T())
 	s.repo = mocks.NewMockAgentRunRepository(s.T())
-	s.svc = agent.NewAgentService(s.runner, s.repo, zap.NewNop())
+	s.prOpener = mocks.NewMockPullRequestOpener(s.T())
+	s.svc = agent.NewAgentService(s.runner, s.repo, s.prOpener, zap.NewNop())
 }
 
 func TestRunAgentServiceTestSuite(t *testing.T) {
@@ -46,7 +48,14 @@ func (s *AgentServiceTestSuite) TestRunAgentTask_Success() {
 		TaskDescription: "fill in the TODO(agent) markers",
 		Rubric:          "go build ./... succeeds",
 	}
-	s.runner.On("StartSession", mock.Anything, req).Return("session-123", nil)
+	// The augmented task description (branch instructions appended) is what
+	// actually reaches StartSession — match on that, not the raw request.
+	s.runner.On("StartSession", mock.Anything, mock.MatchedBy(func(got agent.RunAgentTaskRequest) bool {
+		return got.Provider == "claude" &&
+			got.RepoURL == req.RepoURL &&
+			got.TaskDescription != req.TaskDescription &&
+			got.TaskDescription[:len(req.TaskDescription)] == req.TaskDescription
+	})).Return("session-123", nil)
 	s.repo.On("Create", mock.Anything, mock.MatchedBy(func(run *greysealv1.AgentRun) bool {
 		return run.GetProvider() == "claude" &&
 			run.GetRepoUrl() == req.RepoURL &&
@@ -54,6 +63,15 @@ func (s *AgentServiceTestSuite) TestRunAgentTask_Success() {
 			run.GetSessionId() == "session-123" &&
 			run.GetUuid() != ""
 	})).Return(nil)
+	// RunAgentTask also spawns a background watcher goroutine (real
+	// NewAgentService, default ~20s poll interval); it races against this
+	// test and may or may not get scheduled before the test returns. These
+	// are .Maybe() so either outcome passes — watcher behavior itself is
+	// tested directly, synchronously, and without any generated mocks (to
+	// avoid an agent<->mocks import cycle) in service_internal_test.go.
+	s.runner.On("GetSessionStatus", mock.Anything, "session-123").Maybe().Return("terminated", "", nil)
+	s.repo.On("Get", mock.Anything, mock.Anything).Maybe().Return(&greysealv1.AgentRun{}, nil)
+	s.repo.On("Update", mock.Anything, mock.Anything, mock.Anything).Maybe().Return(nil)
 
 	run, err := s.svc.RunAgentTask(context.Background(), req)
 	s.Require().NoError(err)
@@ -63,7 +81,7 @@ func (s *AgentServiceTestSuite) TestRunAgentTask_Success() {
 
 func (s *AgentServiceTestSuite) TestRunAgentTask_StartSessionError() {
 	req := agent.RunAgentTaskRequest{Provider: "claude", RepoURL: "https://github.com/holmes89/firefly"}
-	s.runner.On("StartSession", mock.Anything, req).Return("", errors.New("boom"))
+	s.runner.On("StartSession", mock.Anything, mock.Anything).Return("", errors.New("boom"))
 
 	_, err := s.svc.RunAgentTask(context.Background(), req)
 	s.Require().Error(err)
@@ -72,15 +90,14 @@ func (s *AgentServiceTestSuite) TestRunAgentTask_StartSessionError() {
 func (s *AgentServiceTestSuite) TestGetAgentRun_RefreshesLiveStatus() {
 	existing := &greysealv1.AgentRun{Uuid: "run-1", Status: "running", SessionId: "session-123"}
 	s.repo.On("Get", mock.Anything, "run-1").Return(existing, nil)
-	s.runner.On("GetSessionStatus", mock.Anything, "session-123").Return("idle", "https://github.com/holmes89/firefly/pull/1", nil)
+	s.runner.On("GetSessionStatus", mock.Anything, "session-123").Return("idle", "", nil)
 	s.repo.On("Update", mock.Anything, "run-1", mock.MatchedBy(func(run *greysealv1.AgentRun) bool {
-		return run.GetStatus() == "idle" && run.GetPrUrl() == "https://github.com/holmes89/firefly/pull/1"
+		return run.GetStatus() == "idle"
 	})).Return(nil)
 
 	run, err := s.svc.GetAgentRun(context.Background(), "run-1")
 	s.Require().NoError(err)
 	s.Equal("idle", run.GetStatus())
-	s.Equal("https://github.com/holmes89/firefly/pull/1", run.GetPrUrl())
 }
 
 func (s *AgentServiceTestSuite) TestGetAgentRun_SkipsRefreshWhenTerminated() {
@@ -91,6 +108,20 @@ func (s *AgentServiceTestSuite) TestGetAgentRun_SkipsRefreshWhenTerminated() {
 	run, err := s.svc.GetAgentRun(context.Background(), "run-1")
 	s.Require().NoError(err)
 	s.Equal("terminated", run.GetStatus())
+}
+
+func (s *AgentServiceTestSuite) TestGetAgentRun_DoesNotOpenPullRequestItself() {
+	// GetAgentRun's opportunistic refresh must never call the PR opener —
+	// that's exclusively the watcher's job. No OpenPullRequest expectation
+	// is set on s.prOpener; the mock panics on an unexpected call, so this
+	// fails loudly if that ever changes.
+	existing := &greysealv1.AgentRun{Uuid: "run-1", Status: "running", SessionId: "session-123"}
+	s.repo.On("Get", mock.Anything, "run-1").Return(existing, nil)
+	s.runner.On("GetSessionStatus", mock.Anything, "session-123").Return("idle", "satisfied", nil)
+	s.repo.On("Update", mock.Anything, "run-1", mock.Anything).Return(nil)
+
+	_, err := s.svc.GetAgentRun(context.Background(), "run-1")
+	s.Require().NoError(err)
 }
 
 func (s *AgentServiceTestSuite) TestStreamAgentRun_RelaysEvents() {

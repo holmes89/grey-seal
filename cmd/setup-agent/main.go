@@ -27,32 +27,29 @@ Implement the task, run the repository's own build/test commands to verify your 
 against the rubric, and iterate until it passes. Match the surrounding code's existing
 conventions. Do not add anything beyond what the task asks for.
 
-Once the rubric is satisfied, push your branch and open a pull request describing what
-you did and why, including any open questions or low-confidence items a human reviewer
-should look at before merging. Do not merge the PR yourself.`
+Your task instructions will tell you the exact branch name to push your finished,
+committed changes to. Push to that branch on the "origin" remote once the rubric is
+satisfied. Do not open a pull request yourself — that is handled separately, outside
+this session.`
 
 func main() {
 	ctx := context.Background()
 	client := anthropic.NewClient()
 
+	// No GitHub MCP server/tool here: the agent gets git push access via the
+	// github_repository session resource's own token (see StartSession in
+	// lib/repo/managedagents/client.go), which is enough to commit and push
+	// a branch via bash. Opening the pull request itself is handled outside
+	// this session — grey-seal calls the GitHub REST API directly once the
+	// run's outcome is satisfied (lib/repo/github), so no MCP server
+	// declaration or vault credential is needed.
 	agent, err := client.Beta.Agents.New(ctx, anthropic.BetaAgentNewParams{
 		Name:   "grey-seal-coding-agent",
 		Model:  anthropic.BetaManagedAgentsModelConfigParams{ID: anthropic.BetaManagedAgentsModelClaudeOpus5},
 		System: anthropic.String(systemPrompt),
-		MCPServers: []anthropic.BetaManagedAgentsURLMCPServerParams{
-			{
-				Type: anthropic.BetaManagedAgentsURLMCPServerParamsTypeURL,
-				Name: "github",
-				URL:  "https://api.githubcopilot.com/mcp/",
-			},
-		},
 		Tools: []anthropic.BetaAgentNewParamsToolUnion{
 			{OfAgentToolset20260401: &anthropic.BetaManagedAgentsAgentToolset20260401Params{
 				Type: anthropic.BetaManagedAgentsAgentToolset20260401ParamsTypeAgentToolset20260401,
-			}},
-			{OfMCPToolset: &anthropic.BetaManagedAgentsMCPToolsetParams{
-				Type:          anthropic.BetaManagedAgentsMCPToolsetParamsTypeMCPToolset,
-				MCPServerName: "github",
 			}},
 		},
 	})
@@ -77,8 +74,4 @@ func main() {
 	fmt.Printf("AGENT_ID=%s\n", agent.ID)
 	fmt.Printf("ENVIRONMENT_ID=%s\n", environment.ID)
 	fmt.Println("\nAdd these to the api service's environment (docker-compose.yml) and restart it.")
-	fmt.Println("\nNote: opening pull requests via the GitHub MCP server requires a vault credential")
-	fmt.Println("(GitHub OAuth) attached at session-create time — not yet wired into this Phase 1")
-	fmt.Println("script. Until then, sessions can push branches (via the github_repository resource's")
-	fmt.Println("own token) but PR creation via the MCP tool will fail until a vault is attached.")
 }
