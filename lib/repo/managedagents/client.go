@@ -83,18 +83,23 @@ func (r *SessionRunner) StartSession(ctx context.Context, req agentsvc.RunAgentT
 	return session.ID, nil
 }
 
-// GetSessionStatus returns the live session status. PR URL extraction is
-// deliberately not implemented in this phase — reading it reliably requires
-// scanning session output files (Files API `scope_id` filtering), which the
-// SDK itself documents as still finicky (indexing lag, retry needed). A
-// caller streaming the run's events will see any PR link the agent reports
-// as ordinary message text instead.
-func (r *SessionRunner) GetSessionStatus(ctx context.Context, sessionID string) (string, string, error) {
+// GetSessionStatus returns the live session status, plus the most recent
+// outcome-evaluation result ("" if no outcome has been defined yet, else one
+// of "pending"/"running"/"evaluating"/"satisfied"/"max_iterations_reached"/
+// "failed"/"interrupted" — see BetaManagedAgentsOutcomeEvaluationResource).
+// PR creation is driven off this result, not off scanning session output
+// files — the SDK itself documents Files-API output scanning as still
+// finicky (indexing lag, retry needed), while OutcomeEvaluations is a plain
+// field on the session object.
+func (r *SessionRunner) GetSessionStatus(ctx context.Context, sessionID string) (status string, outcomeResult string, err error) {
 	session, err := r.client.Beta.Sessions.Get(ctx, sessionID, anthropic.BetaSessionGetParams{})
 	if err != nil {
 		return "", "", fmt.Errorf("managed agents: get session: %w", err)
 	}
-	return string(session.Status), "", nil
+	if len(session.OutcomeEvaluations) > 0 {
+		outcomeResult = session.OutcomeEvaluations[len(session.OutcomeEvaluations)-1].Result
+	}
+	return string(session.Status), outcomeResult, nil
 }
 
 func (r *SessionRunner) StreamSession(ctx context.Context, sessionID string, stream func(event agentsvc.AgentRunEvent) error) error {
