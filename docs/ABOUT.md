@@ -17,6 +17,7 @@ It also gave me a concrete project to learn how RAG pipelines work in practice â
 - Streams responses back to the client via a Connect-RPC server-streaming `Chat` RPC.
 - Records per-message feedback (âˆ’1 / 0 / 1) for quality tracking.
 - Provides a CLI (`ingest`) for submitting URLs or raw text to the knowledge base.
+- Orchestrates **agentic coding-task runs**: hands a task description and rubric to Claude via Anthropic's Managed Agents, polls the run to completion, and opens a pull request against the target GitHub repo directly via the GitHub REST API once the run's outcome is satisfied.
 
 ## Tech Stack
 
@@ -24,5 +25,6 @@ It also gave me a concrete project to learn how RAG pipelines work in practice â
 - **LLM inference:** Ollama (`deepseek-r1` by default)
 - **Vector search:** Shrike (which in turn uses Qdrant + Ollama embeddings)
 - **Messaging:** Kafka (Redpanda in local development)
+- **Agentic coding runs:** Claude via Anthropic's Managed Agents API, with pull requests opened via the GitHub REST API
 
 For a deeper look at how the pieces fit together, see [ARCH.md](ARCH.md).
