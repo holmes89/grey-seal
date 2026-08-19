@@ -10,15 +10,17 @@ C4Context
 
   Boundary(platform, "joel.holmes.haus Platform") {
     System(ui, "joel.holmes.haus", "Go-app WASM admin SPA")
-    System(greyseal, "Grey Seal", "RAG-powered conversation and resource management service")
+    System(greyseal, "Grey Seal", "RAG-powered conversation, resource, and agent-run management service")
     System(shrike, "Shrike", "Search — provides hybrid semantic/keyword context retrieval")
     System(magpie, "Magpie", "Resource hub — receives ingested resources from Grey Seal")
   }
 
-  SystemDb(postgres, "PostgreSQL", "Conversations, messages, roles, resources")
+  SystemDb(postgres, "PostgreSQL", "Conversations, messages, roles, resources, agent runs")
   SystemDb(redis, "Redis", "Per-conversation resource snippet cache (24 h TTL)")
   System_Ext(ollama, "Ollama", "Local LLM (deepseek-r1) — streaming chat completions")
   SystemQueue(kafka, "Kafka", "greyseal.v1.Resource (ingest queue) · shrike.v1.TextExtractedEvent")
+  System_Ext(managedagents, "Anthropic Managed Agents", "Claude — hosted agentic coding-task runs against a target repo")
+  System_Ext(github, "GitHub REST API", "Opens pull requests once an agent run's outcome is satisfied")
 
   Rel(admin, ui, "Uses")
   Rel(ui, greyseal, "ConnectRPC")
@@ -29,6 +31,8 @@ C4Context
   Rel(greyseal, kafka, "Publishes greyseal.v1.Resource")
   Rel(kafka, greyseal, "async ingest queue")
   Rel(kafka, magpie, "greyseal.v1.Resource")
+  Rel(greyseal, managedagents, "Starts/polls/streams coding-agent sessions")
+  Rel(greyseal, github, "Opens pull request via REST once outcome is satisfied")
 ```
 
 ## Container Diagram
@@ -45,9 +49,13 @@ C4Container
     Container(resourceSvc, "resource.Service", "Go", "Ingest · CRUD — triggers async indexing via KafkaIndexer")
     Container(roleSvc, "role.Service", "Go", "CRUD for system prompt roles")
     Container(cache, "RedisResourceCache", "Go / Redis", "Per-conversation snippet cache keyed greyseal:conv:{uuid}:resources")
+    Container(agentSvc, "agent.Service", "Go", "RunAgentTask · GetAgentRun · StreamAgentRun — watches sessions to completion, opens PR")
+    Container(sessionRunner, "managedagents.SessionRunner", "Go / Anthropic SDK", "Starts/polls/streams Managed Agents sessions")
+    Container(prOpener, "github.Client", "Go / net-http", "Opens a pull request via the GitHub REST API")
 
     ContainerDb(convRepo, "ConversationRepo + MessageRepo", "PostgreSQL / squirrel", "conversations · messages tables")
     ContainerDb(resourceRepo, "ResourceRepo", "PostgreSQL / squirrel", "resources table")
+    ContainerDb(agentRepo, "AgentRunRepo", "PostgreSQL / squirrel", "agent_runs table")
   }
 
   SystemDb(postgres, "PostgreSQL", "")
@@ -55,10 +63,13 @@ C4Container
   System_Ext(ollama, "Ollama", "POST /api/chat stream")
   System_Ext(shrike, "Shrike", "ConnectRPC SearchService")
   SystemQueue(kafka, "Kafka", "")
+  System_Ext(managedagents, "Anthropic Managed Agents", "")
+  System_Ext(github, "GitHub REST API", "")
 
   Rel(api, convSvc, "Chat · CRUD")
   Rel(api, resourceSvc, "Ingest · CRUD")
   Rel(api, roleSvc, "CRUD")
+  Rel(api, agentSvc, "RunAgentTask · GetAgentRun · StreamAgentRun")
   Rel(convSvc, cache, "Cache-first context lookup")
   Rel(convSvc, shrike, "Hybrid search with EntityUUIDs filter")
   Rel(convSvc, ollama, "Streaming completion")
@@ -69,12 +80,18 @@ C4Container
   Rel(worker, kafka, "Publishes shrike.v1.TextExtractedEvent")
   Rel(convRepo, postgres, "SQL")
   Rel(resourceRepo, postgres, "SQL")
+  Rel(agentRepo, postgres, "SQL")
   Rel(cache, redis, "GET / SET")
+  Rel(agentSvc, sessionRunner, "StartSession · GetSessionStatus · StreamSession")
+  Rel(agentSvc, prOpener, "OpenPullRequest once outcome is satisfied")
+  Rel(agentSvc, agentRepo, "Persist run status/PR URL")
+  Rel(sessionRunner, managedagents, "Beta Sessions API")
+  Rel(prOpener, github, "POST /repos/{owner}/{repo}/pulls")
 ```
 
 ## Overview
 
-grey-seal is a single-binary Go service (`cmd/api`) that exposes a Connect-RPC API over HTTP/2 (h2c). It uses a layered architecture: a thin gRPC/Connect handler layer delegates to domain service interfaces, which are backed by PostgreSQL repositories. LLM inference is delegated to a local Ollama instance; semantic search is delegated to the external **shrike** service. Resources are ingested asynchronously via **Redpanda/Kafka**: the API enqueues events that the **worker** process consumes to fetch content and forward it to shrike for chunking, embedding, and vector indexing.
+grey-seal is a single-binary Go service (`cmd/api`) that exposes a Connect-RPC API over HTTP/2 (h2c). It uses a layered architecture: a thin gRPC/Connect handler layer delegates to domain service interfaces, which are backed by PostgreSQL repositories. LLM inference is delegated to a local Ollama instance; semantic search is delegated to the external **shrike** service. Resources are ingested asynchronously via **Redpanda/Kafka**: the API enqueues events that the **worker** process consumes to fetch content and forward it to shrike for chunking, embedding, and vector indexing. A fourth domain, **agent**, orchestrates agentic coding-task runs against Claude via Anthropic's Managed Agents API and opens the resulting pull request directly through the GitHub REST API; its route is registered only when `AGENT_ID`/`ENVIRONMENT_ID` are configured (see [`cmd/setup-agent`](#process-inventory)).
 
 ```mermaid
 graph TD
@@ -120,6 +137,7 @@ graph TD
 |---|---|---|---|
 | API server | `cmd/api/main.go` | 9000 | Active, ships in `Dockerfile` |
 | Worker | `cmd/worker/main.go` | — | Kafka consumer; fetches web/PDF content and forwards to shrike |
+| setup-agent | `cmd/setup-agent/main.go` | — | One-time (or occasional-update) operator command; provisions the Managed Agents Agent + Environment and prints `AGENT_ID`/`ENVIRONMENT_ID` for the API server's env. Never run from the request path |
 | UI | `cmd/ui/main.go` | 8000 | `//go:build ignore`; excluded from normal builds |
 
 ## Transport
@@ -159,6 +177,24 @@ The core RAG orchestration service. Handles CRUD on conversations and the `Chat`
 
 `ResourceCache` (`lib/repo/cache/RedisResourceCache`) stores per-conversation resource snippets in Redis (key `greyseal:conv:{uuid}:resources`, TTL 24 h). Wired when `REDIS_URL` is set; `nil` otherwise (no caching).
 
+`TranscriptWriter` (`lib/repo/transcript/Writer`), when `TRANSCRIPT_DIR` is set, records a `TranscriptTurn` per `Chat` call — the assembled system prompt, summary, search query/results, full message list sent to the LLM, and the response — for offline review of the RAG pipeline. `nil` (no-op) otherwise.
+
+### Agent service (`lib/greyseal/agent/`)
+
+Orchestrates agentic coding-task runs against Claude via Anthropic's Managed Agents API. Exposes `RunAgentTask`, `GetAgentRun`, `StreamAgentRun`. Only wired when both `AGENT_ID` and `ENVIRONMENT_ID` are set (provisioned once via `cmd/setup-agent`); otherwise the route is skipped entirely.
+
+`RunAgentTask`:
+1. Generates a run UUID and derives a branch name `agent/<uuid>`.
+2. Appends branch/PR instructions to the task description (push to that branch on `origin`; do not open a PR — grey-seal does that once the outcome is satisfied).
+3. Calls `SessionRunner.StartSession` (adapter: `lib/repo/managedagents`, the only package importing the Anthropic SDK) to start a Managed Agents session against the target repo, then persists an `AgentRun` row (`status: "running"`) and returns it immediately.
+4. Spawns a detached goroutine, `watchForCompletion`, that polls `SessionRunner.GetSessionStatus` on an interval (default 20s, bounded by a 1h timeout) — not tied to the originating request's context, but also not durable across a process restart.
+
+`watchForCompletion` persists the latest status on each poll and, the first time the provider's outcome-evaluation result is `"satisfied"` (guarded by `AgentRun.PrUrl` being empty so a PR opens at most once), calls `PullRequestOpener.OpenPullRequest` (adapter: `lib/repo/github`, a direct GitHub REST call — deliberately not a GitHub MCP tool, so no MCP server/vault wiring is needed) and stores the resulting PR URL. Polling stops once the session is `"terminated"` or the outcome result is terminal (`satisfied` / `failed` / `max_iterations_reached` / `interrupted`).
+
+`GetAgentRun` refreshes status from the live provider session (source of truth while a session is active) before returning the persisted row. `StreamAgentRun` relays provider SSE events (`agent.message`, `agent.tool_use`/`agent.mcp_tool_use`, `session.status_idle`, `session.status_terminated`, `session.error`) via `SessionRunner.StreamSession`.
+
+Only `provider: "claude"` is implemented; `"ollama:<model>"` is a reserved, not-yet-implemented value. Persisted in the `agent_runs` table (`uuid`, `provider`, `repo_url`, `status`, `session_id`, `pr_url`, `error`, `created_at`, `updated_at`).
+
 ## Worker (`cmd/worker/`)
 
 Consumes the `v1.Resource` Kafka topic via `archaea/kafka.Consumer`. For each resource:
@@ -176,7 +212,9 @@ All repositories embed `*Conn`, which holds a `*sql.DB`. SQL is built with `Mast
 
 ## LLM Adapter (`lib/repo/ollama/`)
 
-`ollama.LLM` implements `conversation.LLM`. It POSTs to Ollama's `/api/chat` endpoint with `"stream": true` and reads newline-delimited JSON chunks, invoking the provided callback per token. Configuration is via `OLLAMA_HOST` and `OLLAMA_CHAT_MODEL` environment variables (defaults: `http://localhost:11434`, `deepseek-r1`).
+`ollama.LLM` implements `conversation.LLM`. It POSTs to Ollama's `/api/chat` endpoint with `"stream": true` and reads newline-delimited JSON chunks, invoking the provided callback per token. Configuration is via `OLLAMA_HOST` and `OLLAMA_CHAT_MODEL` environment variables (defaults: `http://localhost:11434`, `deepseek-r1`), plus `OLLAMA_THINK=true` to request the model's thinking/reasoning trace.
+
+A second, unwired implementation exists at `lib/repo/llm/golangchain.go`, wrapping the same Ollama backend via `tmc/langchaingo` instead of a hand-rolled HTTP client. `cmd/api` does not construct or use it.
 
 ## Search Adapter
 
@@ -204,3 +242,7 @@ The root Cobra command is `grey-seal`. The only active subcommand is `ingest`. T
 | `github.com/spf13/cobra` | CLI framework |
 | `github.com/google/uuid` | UUID generation |
 | `github.com/lib/pq` | PostgreSQL driver + array support |
+| `github.com/anthropics/anthropic-sdk-go` | Managed Agents API — agent session lifecycle, `cmd/setup-agent` provisioning |
+| `github.com/twmb/franz-go` | Kafka client underlying `archaea`'s producer/consumer |
+| `github.com/XSAM/otelsql` | OTel instrumentation for `database/sql` |
+| `github.com/tmc/langchaingo` | Alternate Ollama-backed `conversation.LLM` implementation (`lib/repo/llm`); not wired into `cmd/api` — the active adapter is `lib/repo/ollama` |

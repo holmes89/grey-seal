@@ -1,15 +1,20 @@
-# grey-seal
+# Grey Seal
 
-grey-seal is a Retrieval-Augmented Generation (RAG) chat backend written in Go. It manages **conversations**, **roles** (system prompts), and **resources** (indexed documents). At runtime it wires together a PostgreSQL store, an Ollama LLM, and an external vector-search service called **shrike** to answer user queries grounded in an indexed knowledge base.
+![Grey Seal logo](logo.jpg)
 
-## Features
+*Logo: [Halichoerus grypus He3](https://commons.wikimedia.org/wiki/File:Halichoerus_grypus_He3.jpg) by Andreas Trepte, CC BY-SA 2.5 via Wikimedia Commons*
 
-- Streaming chat via a Connect-RPC server-streaming RPC (`Chat`)
+Grey Seal is a self-hosted Retrieval-Augmented Generation (RAG) chat backend written in Go. It manages **conversations**, **roles** (system prompts), and **resources** (indexed documents), and answers user queries grounded in a knowledge base it indexes itself. At runtime it wires together a PostgreSQL store, an Ollama LLM, and an external vector-search service called **shrike**; the LLM runs locally and the data never leaves the network.
+
+## What It Does
+
+- Streaming chat via a Connect-RPC server-streaming RPC (`Chat`), retrieving relevant context from **shrike** and injecting it into the LLM prompt
 - Role-based system prompts that can be assigned per conversation
 - Resource scoping: a conversation can restrict retrieval to a named set of indexed documents
 - Message-level feedback recording (-1 / 0 / 1)
 - Automatic schema migrations using goose (embedded in the binary)
 - CLI (`ingest`) for submitting URLs or raw text to the knowledge base
+- Orchestrates agentic coding-task runs against Claude (Anthropic Managed Agents) and opens the resulting pull request directly via the GitHub REST API once the run's outcome is satisfied
 - Optional management web UI (compiled with go-app, currently excluded from the default build)
 
 ## Quick Start
