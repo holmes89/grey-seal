@@ -16,11 +16,11 @@ services:
       OLLAMA_EMBED_MODEL: "all-minilm"
       OLLAMA_CHAT_MODEL: "deepseek-r1"
       # Agent service (Aider + LiteLLM + Ollama) — leave LITELLM_BASE_URL
-      # unset to disable the route. LITELLM_API_KEY should match
-      # LITELLM_MASTER_KEY below (export both in shell/.env, never commit a
-      # real value here).
+      # unset to disable the route. LITELLM_API_KEY must match
+      # LITELLM_MASTER_KEY below — set both via a git-ignored .env file
+      # (see .env.example), never hardcoded here.
       LITELLM_BASE_URL: "http://litellm:4000"
-      LITELLM_API_KEY: ""
+      LITELLM_API_KEY: "${LITELLM_API_KEY:-}"
       LITELLM_MODEL: "qwen-coder"
       AIDER_RUNNER_IMAGE: "ghcr.io/holmes89/greyseal-aider-runner:latest"
     ports:
@@ -89,8 +89,8 @@ services:
     restart: always
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
-      # Must match LITELLM_API_KEY above — export both in shell/.env.
-      LITELLM_MASTER_KEY: ""
+      # Must match LITELLM_API_KEY above — set both in .env, see .env.example.
+      LITELLM_MASTER_KEY: "${LITELLM_API_KEY:-}"
     volumes:
       - ./litellm-config.yaml:/app/config.yaml:ro
     ports:

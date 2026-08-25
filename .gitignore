@@ -1,0 +1,5 @@
+# Local secrets for docker compose (see .env.example)
+.env
+
+# docker-compose bind-mount volumes (postgres/qdrant/ollama data)
+data/
