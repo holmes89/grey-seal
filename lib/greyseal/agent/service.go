@@ -49,7 +49,7 @@ func NewAgentService(runner SessionRunner, repo AgentRunRepository, prOpener Pul
 }
 
 func (srv *agentService) RunAgentTask(ctx context.Context, req RunAgentTaskRequest) (*greysealv1.AgentRun, error) {
-	if req.Provider != "claude" {
+	if req.Provider != "aider" {
 		return nil, fmt.Errorf("provider %q is not yet implemented", req.Provider)
 	}
 
@@ -63,6 +63,7 @@ func (srv *agentService) RunAgentTask(ctx context.Context, req RunAgentTaskReque
 	)
 
 	startReq := req
+	startReq.PushBranch = branchName
 	startReq.TaskDescription = withBranchInstructions(req.TaskDescription, branchName)
 
 	sessionID, err := srv.runner.StartSession(ctx, startReq)

@@ -22,9 +22,9 @@ import (
 	rolesvc "github.com/holmes89/grey-seal/lib/greyseal/role"
 	rolegrpc "github.com/holmes89/grey-seal/lib/greyseal/role/grpc"
 	"github.com/holmes89/grey-seal/lib/repo"
+	"github.com/holmes89/grey-seal/lib/repo/aiderrunner"
 	"github.com/holmes89/grey-seal/lib/repo/cache"
 	"github.com/holmes89/grey-seal/lib/repo/github"
-	"github.com/holmes89/grey-seal/lib/repo/managedagents"
 	"github.com/holmes89/grey-seal/lib/repo/ollama"
 	"github.com/holmes89/grey-seal/lib/repo/transcript"
 	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
@@ -136,19 +136,32 @@ func main() {
 	logger.Info("registering conversation service route", zap.String("path", convPath))
 	srv.Handle(convPath, convHandler)
 
-	// Agent service (Managed Agents / Claude); requires the one-time
-	// provisioning done by cmd/setup-agent. Route is skipped entirely if
-	// unconfigured, rather than registered in a broken state.
-	if agentID, envID := os.Getenv("AGENT_ID"), os.Getenv("ENVIRONMENT_ID"); agentID != "" && envID != "" {
+	// Agent service (Aider, run in disposable Docker containers, backed by
+	// LiteLLM + Ollama). Route is skipped entirely if unconfigured, rather
+	// than registered in a broken state.
+	if litellmBaseURL := os.Getenv("LITELLM_BASE_URL"); litellmBaseURL != "" {
+		aiderImage := os.Getenv("AIDER_RUNNER_IMAGE")
+		if aiderImage == "" {
+			aiderImage = "ghcr.io/holmes89/greyseal-aider-runner:latest"
+		}
+		litellmModel := os.Getenv("LITELLM_MODEL")
+		if litellmModel == "" {
+			litellmModel = "qwen-coder"
+		}
+
 		agentRunRepo := &repo.AgentRunRepo{Conn: store}
-		runner := managedagents.NewSessionRunner(agentID, envID)
-		prOpener := github.NewClient()
-		agentSvc := agentsvc.NewAgentService(runner, agentRunRepo, prOpener, logger)
-		agentPath, agentHandler := servicesconnect.NewAgentServiceHandler(agentgrpc.NewAgentHandler(agentSvc))
-		logger.Info("registering agent service route", zap.String("path", agentPath))
-		srv.Handle(agentPath, agentHandler)
+		runner, err := aiderrunner.NewSessionRunner(aiderImage, litellmBaseURL, os.Getenv("LITELLM_API_KEY"), litellmModel, logger)
+		if err != nil {
+			logger.Warn("failed to create aider session runner — agent service route disabled", zap.Error(err))
+		} else {
+			prOpener := github.NewClient()
+			agentSvc := agentsvc.NewAgentService(runner, agentRunRepo, prOpener, logger)
+			agentPath, agentHandler := servicesconnect.NewAgentServiceHandler(agentgrpc.NewAgentHandler(agentSvc))
+			logger.Info("registering agent service route", zap.String("path", agentPath))
+			srv.Handle(agentPath, agentHandler)
+		}
 	} else {
-		logger.Warn("AGENT_ID/ENVIRONMENT_ID not set — agent service route disabled; run cmd/setup-agent to provision them")
+		logger.Warn("LITELLM_BASE_URL not set — agent service route disabled")
 	}
 
 	srv.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
