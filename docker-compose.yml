@@ -15,23 +15,33 @@ services:
       OLLAMA_HOST: "http://ollama:11434"
       OLLAMA_EMBED_MODEL: "all-minilm"
       OLLAMA_CHAT_MODEL: "deepseek-r1"
-      # Agent service (Managed Agents / Claude) — leave unset to disable the
-      # route. ANTHROPIC_API_KEY should be exported in the shell/.env, never
-      # committed here. AGENT_ID/ENVIRONMENT_ID come from `go run
-      # ./cmd/setup-agent` (run once).
-      ANTHROPIC_API_KEY: ""
-      AGENT_ID: ""
-      ENVIRONMENT_ID: ""
+      # Agent service (Aider + LiteLLM + Ollama) — leave LITELLM_BASE_URL
+      # unset to disable the route. LITELLM_API_KEY should match
+      # LITELLM_MASTER_KEY below (export both in shell/.env, never commit a
+      # real value here).
+      LITELLM_BASE_URL: "http://litellm:4000"
+      LITELLM_API_KEY: ""
+      LITELLM_MODEL: "qwen-coder"
+      AIDER_RUNNER_IMAGE: "ghcr.io/holmes89/greyseal-aider-runner:latest"
     ports:
       - 9000:9000
     networks:
       - web
+    volumes:
+      # Lets the api container spin up sibling aider-runner containers
+      # directly on the host's Docker daemon (see lib/repo/aiderrunner).
+      # This is host-root-equivalent access from inside the container —
+      # accepted tradeoff for a personal single-instance box; see the
+      # aider-litellm-agent-runner plan.
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       db:
         condition: service_healthy
       qdrant:
         condition: service_started
       ollama:
+        condition: service_started
+      litellm:
         condition: service_started
 
   db:
@@ -73,6 +83,23 @@ services:
       - ./data/ollama:/root/.ollama
     networks:
       - web
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    restart: always
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      # Must match LITELLM_API_KEY above — export both in shell/.env.
+      LITELLM_MASTER_KEY: ""
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    ports:
+      - 4000:4000
+    networks:
+      - web
+    depends_on:
+      ollama:
+        condition: service_started
 
   worker:
     image: ghcr.io/holmes89/greyseal-worker:latest

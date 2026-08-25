@@ -14,7 +14,7 @@ Grey Seal is a self-hosted Retrieval-Augmented Generation (RAG) chat backend wri
 - Message-level feedback recording (-1 / 0 / 1)
 - Automatic schema migrations using goose (embedded in the binary)
 - CLI (`ingest`) for submitting URLs or raw text to the knowledge base
-- Orchestrates agentic coding-task runs against Claude (Anthropic Managed Agents) and opens the resulting pull request directly via the GitHub REST API once the run's outcome is satisfied
+- Orchestrates agentic coding-task runs via Aider, run in disposable Docker containers against a self-hosted LiteLLM + Ollama stack, and opens the resulting pull request directly via the GitHub REST API once the run finishes successfully
 - Optional management web UI (compiled with go-app, currently excluded from the default build)
 
 ## Quick Start
@@ -24,10 +24,12 @@ Grey Seal is a self-hosted Retrieval-Augmented Generation (RAG) chat backend wri
 | Dependency | Purpose |
 |---|---|
 | PostgreSQL 17 | Persistent store |
-| Ollama | LLM inference and embeddings |
+| Ollama | LLM inference and embeddings, and the model backend for agent runs |
 | shrike | Vector search / hybrid retrieval |
 | Qdrant | Vector database (used by the worker) |
 | Redpanda | Kafka-compatible message broker (used by the worker) |
+| LiteLLM Proxy | Self-hosted OpenAI-compatible router in front of Ollama; gives agent runs centralized request/spend logging |
+| Docker socket access | The API container mounts `/var/run/docker.sock` to spin up disposable Aider containers for agent runs (see `lib/repo/aiderrunner`) |
 
 ### Run with Docker Compose
 
@@ -47,6 +49,10 @@ The compose file starts PostgreSQL, Qdrant, Ollama, Redpanda, the API server, an
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama base URL |
 | `OLLAMA_CHAT_MODEL` | `deepseek-r1` | Model name for chat completions |
 | `SHRIKE_URL` | `http://shrike:9000` | Vector search service URL |
+| `LITELLM_BASE_URL` | _(unset)_ | LiteLLM Proxy base URL — the agent service route is disabled entirely if unset |
+| `LITELLM_API_KEY` | _(empty)_ | Key for the LiteLLM Proxy, must match its `LITELLM_MASTER_KEY` |
+| `LITELLM_MODEL` | `qwen-coder` | Model name as configured in `litellm-config.yaml` |
+| `AIDER_RUNNER_IMAGE` | `ghcr.io/holmes89/greyseal-aider-runner:latest` | Image used for each agent run's disposable container (see `docker/aider-runner`) |
 
 #### Worker (`cmd/worker/main.go`)
 

@@ -43,7 +43,7 @@ func (s *AgentServiceTestSuite) TestRunAgentTask_RejectsUnimplementedProvider() 
 
 func (s *AgentServiceTestSuite) TestRunAgentTask_Success() {
 	req := agent.RunAgentTaskRequest{
-		Provider:        "claude",
+		Provider:        "aider",
 		RepoURL:         "https://github.com/holmes89/firefly",
 		TaskDescription: "fill in the TODO(agent) markers",
 		Rubric:          "go build ./... succeeds",
@@ -51,13 +51,13 @@ func (s *AgentServiceTestSuite) TestRunAgentTask_Success() {
 	// The augmented task description (branch instructions appended) is what
 	// actually reaches StartSession — match on that, not the raw request.
 	s.runner.On("StartSession", mock.Anything, mock.MatchedBy(func(got agent.RunAgentTaskRequest) bool {
-		return got.Provider == "claude" &&
+		return got.Provider == "aider" &&
 			got.RepoURL == req.RepoURL &&
 			got.TaskDescription != req.TaskDescription &&
 			got.TaskDescription[:len(req.TaskDescription)] == req.TaskDescription
 	})).Return("session-123", nil)
 	s.repo.On("Create", mock.Anything, mock.MatchedBy(func(run *greysealv1.AgentRun) bool {
-		return run.GetProvider() == "claude" &&
+		return run.GetProvider() == "aider" &&
 			run.GetRepoUrl() == req.RepoURL &&
 			run.GetStatus() == "running" &&
 			run.GetSessionId() == "session-123" &&
@@ -80,7 +80,7 @@ func (s *AgentServiceTestSuite) TestRunAgentTask_Success() {
 }
 
 func (s *AgentServiceTestSuite) TestRunAgentTask_StartSessionError() {
-	req := agent.RunAgentTaskRequest{Provider: "claude", RepoURL: "https://github.com/holmes89/firefly"}
+	req := agent.RunAgentTaskRequest{Provider: "aider", RepoURL: "https://github.com/holmes89/firefly"}
 	s.runner.On("StartSession", mock.Anything, mock.Anything).Return("", errors.New("boom"))
 
 	_, err := s.svc.RunAgentTask(context.Background(), req)

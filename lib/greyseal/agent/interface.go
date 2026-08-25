@@ -8,8 +8,7 @@ import (
 )
 
 // AgentService orchestrates agentic coding-task runs against external
-// providers (Claude via Managed Agents; local models are reserved for a
-// later phase).
+// providers (Aider, backed by a self-hosted LiteLLM+Ollama stack).
 type AgentService interface {
 	// RunAgentTask starts a new agent run and returns immediately with its
 	// initial state; the run continues asynchronously on the provider's side.
@@ -28,14 +27,21 @@ type AgentService interface {
 
 // RunAgentTaskRequest describes a new agent run.
 type RunAgentTaskRequest struct {
-	// Provider: "claude" (only implemented value); "ollama:<model>" reserved
-	// for a later phase.
+	// Provider: "aider" (only implemented value).
 	Provider string
 	RepoURL  string
-	// GithubToken authorizes cloning (and, for Claude, opening a PR against)
-	// RepoURL. Never persisted — used only to start the provider session.
-	GithubToken     string
-	Branch          string // optional; defaults to the repo's default branch
+	// GithubToken authorizes cloning and pushing to RepoURL, and opening the
+	// PR once the run is satisfied. Never persisted — used only in memory
+	// for the run's lifetime.
+	GithubToken string
+	Branch      string // optional; base branch to check out from — defaults to the repo's default branch
+	// PushBranch is the branch the runner must create from Branch and push
+	// finished work to. Set by RunAgentTask (deterministic, "agent/<uuid>")
+	// before calling SessionRunner.StartSession — passed as a discrete field
+	// rather than only embedded in TaskDescription's prose, so a
+	// non-agentic runner (e.g. a shell script driving Aider) can act on it
+	// directly instead of parsing free text.
+	PushBranch      string
 	TaskDescription string
 	Rubric          string
 }
@@ -54,7 +60,7 @@ type AgentRunEvent struct {
 
 // SessionRunner starts and observes agent sessions against a specific
 // provider. Implemented by an adapter outside this package (e.g.
-// lib/repo/managedagents) so this domain package stays free of any provider
+// lib/repo/aiderrunner) so this domain package stays free of any provider
 // SDK import.
 type SessionRunner interface {
 	// StartSession creates a new session for the given task and returns its

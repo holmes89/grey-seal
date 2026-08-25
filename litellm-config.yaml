@@ -1,0 +1,23 @@
+# Config for the self-hosted LiteLLM Proxy (see docker-compose.yml's
+# `litellm` service). Gives grey-seal's aider-runner containers an
+# OpenAI-compatible endpoint backed by the local Ollama service, with
+# centralized request/spend logging — see the
+# aider-litellm-agent-runner plan for why this sits in front of Ollama
+# instead of Aider calling it directly.
+#
+# Adjust the model size to what your hardware can actually run; a smaller
+# variant (e.g. qwen2.5-coder:7b) is a reasonable starting point if 14b is
+# too slow. Whatever you pick here must match what you `ollama pull`.
+model_list:
+  - model_name: qwen-coder
+    litellm_params:
+      model: ollama/qwen2.5-coder:14b
+      api_base: http://ollama:11434
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  # Overridden by LITELLM_MASTER_KEY in docker-compose.yml — set a real
+  # value there (not committed here).
+  master_key: os.environ/LITELLM_MASTER_KEY
