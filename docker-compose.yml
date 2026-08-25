@@ -54,7 +54,7 @@ services:
     ports:
       - 5432:5432
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
     networks:
       - web
     healthcheck:
@@ -70,7 +70,7 @@ services:
       - 6333:6333
       - 6334:6334
     volumes:
-      - ./data/qdrant:/qdrant/storage
+      - qdrant-data:/qdrant/storage
     networks:
       - web
 
@@ -80,7 +80,7 @@ services:
     ports:
       - 11434:11434
     volumes:
-      - ./data/ollama:/root/.ollama
+      - ollama-data:/root/.ollama
     networks:
       - web
 
@@ -159,6 +159,9 @@ services:
 
 volumes:
   redpanda-0: null
+  postgres-data: null
+  qdrant-data: null
+  ollama-data: null
 
 networks:
   web:
