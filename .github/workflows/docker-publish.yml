@@ -57,7 +57,7 @@ jobs:
             dockerfile: Dockerfile.worker
             image: ghcr.io/holmes89/greyseal-worker
           - name: aider-runner
-            dockerfile: Dockerfile
+            dockerfile: docker/aider-runner/Dockerfile
             context: docker/aider-runner
             image: ghcr.io/holmes89/greyseal-aider-runner
 
