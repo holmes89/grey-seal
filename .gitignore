@@ -1,0 +1,10 @@
+# Local secrets for docker compose (see .env.example)
+.env
+
+# Machine-local docker compose overrides (e.g. host port remaps to avoid
+# collisions with other projects' containers) — docker compose picks this
+# up automatically if present.
+docker-compose.override.yml
+
+# docker-compose bind-mount volumes (postgres/qdrant/ollama data)
+data/

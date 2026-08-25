@@ -56,6 +56,10 @@ jobs:
           - name: worker
             dockerfile: Dockerfile.worker
             image: ghcr.io/holmes89/greyseal-worker
+          - name: aider-runner
+            dockerfile: Dockerfile
+            context: docker/aider-runner
+            image: ghcr.io/holmes89/greyseal-aider-runner
 
     steps:
       - name: Checkout repository
@@ -87,7 +91,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ matrix.context || '.' }}
           file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
