@@ -53,6 +53,7 @@ The compose file starts PostgreSQL, Qdrant, Ollama, Redpanda, the API server, an
 | `LITELLM_API_KEY` | _(empty)_ | Key for the LiteLLM Proxy, must match its `LITELLM_MASTER_KEY` |
 | `LITELLM_MODEL` | `qwen-coder` | Model name as configured in `litellm-config.yaml` |
 | `AIDER_RUNNER_IMAGE` | `ghcr.io/holmes89/greyseal-aider-runner:latest` | Image used for each agent run's disposable container (see `docker/aider-runner`) |
+| `AIDER_RUNNER_NETWORK` | _(unset)_ | Docker network to attach each agent run's container to, so it can resolve `litellm` (and other compose services) by hostname — set to the compose project's network name (e.g. `joelholmeshaus_web`) in production. Unset leaves containers on the daemon's default bridge network |
 
 #### Worker (`cmd/worker/main.go`)
 
