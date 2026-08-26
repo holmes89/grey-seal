@@ -30,12 +30,14 @@ type fakeDockerClient struct {
 	logsFn    func(ctx context.Context, containerID string, options container.LogsOptions) (io.ReadCloser, error)
 	removeFn  func(ctx context.Context, containerID string, options container.RemoveOptions) error
 
-	lastCreateConfig *container.Config
-	removedIDs       []string
+	lastCreateConfig     *container.Config
+	lastNetworkingConfig *network.NetworkingConfig
+	removedIDs           []string
 }
 
 func (f *fakeDockerClient) ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error) {
 	f.lastCreateConfig = config
+	f.lastNetworkingConfig = networkingConfig
 	if f.createFn != nil {
 		return f.createFn(ctx, config, hostConfig, networkingConfig, platform, containerName)
 	}
@@ -84,6 +86,7 @@ func newTestRunner(fake *fakeDockerClient) *SessionRunner {
 		litellmBaseURL: "http://litellm:4000",
 		litellmAPIKey:  "sk-test",
 		litellmModel:   "qwen-coder",
+		network:        "",
 		logger:         zap.NewNop(),
 		reapGrace:      defaultReapGrace,
 		reapInterval:   defaultReapInterval,
@@ -128,6 +131,35 @@ func TestStartSession_BuildsEnvAndStarts(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "expected TASK_DESCRIPTION to include the rubric, got env: %v", env)
+}
+
+func TestStartSession_AttachesConfiguredNetwork(t *testing.T) {
+	fake := &fakeDockerClient{}
+	r := newTestRunner(fake)
+	r.network = "joelholmeshaus_web"
+
+	_, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
+		RepoURL:    "https://github.com/owner/repo",
+		PushBranch: "agent/run-1",
+	})
+	require.NoError(t, err)
+
+	require.NotNil(t, fake.lastNetworkingConfig)
+	require.Contains(t, fake.lastNetworkingConfig.EndpointsConfig, "joelholmeshaus_web")
+}
+
+func TestStartSession_NoNetworkConfiguredLeavesEndpointsEmpty(t *testing.T) {
+	fake := &fakeDockerClient{}
+	r := newTestRunner(fake) // network is "" by default
+
+	_, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
+		RepoURL:    "https://github.com/owner/repo",
+		PushBranch: "agent/run-1",
+	})
+	require.NoError(t, err)
+
+	require.NotNil(t, fake.lastNetworkingConfig)
+	assert.Empty(t, fake.lastNetworkingConfig.EndpointsConfig)
 }
 
 func TestStartSession_OmitsBaseBranchWhenUnset(t *testing.T) {

@@ -48,6 +48,7 @@ type SessionRunner struct {
 	litellmBaseURL string
 	litellmAPIKey  string
 	litellmModel   string
+	network        string
 	logger         *zap.Logger
 
 	reapGrace    time.Duration
@@ -60,22 +61,26 @@ type SessionRunner struct {
 // NewSessionRunner constructs a SessionRunner against the local Docker
 // daemon (resolved via the standard DOCKER_HOST / socket env conventions)
 // and starts its background reaper goroutine, which removes finished
-// containers after a grace window (see reapLoop).
-func NewSessionRunner(image, litellmBaseURL, litellmAPIKey, litellmModel string, logger *zap.Logger) (*SessionRunner, error) {
+// containers after a grace window (see reapLoop). networkName attaches
+// spawned Aider containers to that Docker network so they can resolve
+// sibling services (litellm, etc.) by name; when empty, containers land on
+// the daemon's default bridge network as before.
+func NewSessionRunner(image, litellmBaseURL, litellmAPIKey, litellmModel, networkName string, logger *zap.Logger) (*SessionRunner, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
-	return newSessionRunner(cli, image, litellmBaseURL, litellmAPIKey, litellmModel, logger), nil
+	return newSessionRunner(cli, image, litellmBaseURL, litellmAPIKey, litellmModel, networkName, logger), nil
 }
 
-func newSessionRunner(docker dockerClient, image, litellmBaseURL, litellmAPIKey, litellmModel string, logger *zap.Logger) *SessionRunner {
+func newSessionRunner(docker dockerClient, image, litellmBaseURL, litellmAPIKey, litellmModel, networkName string, logger *zap.Logger) *SessionRunner {
 	r := &SessionRunner{
 		docker:         docker,
 		image:          image,
 		litellmBaseURL: litellmBaseURL,
 		litellmAPIKey:  litellmAPIKey,
 		litellmModel:   litellmModel,
+		network:        networkName,
 		logger:         logger,
 		reapGrace:      defaultReapGrace,
 		reapInterval:   defaultReapInterval,
@@ -113,6 +118,13 @@ func (r *SessionRunner) StartSession(ctx context.Context, req agentsvc.RunAgentT
 		env = append(env, "BASE_BRANCH="+req.Branch)
 	}
 
+	var networkingConfig network.NetworkingConfig
+	if r.network != "" {
+		networkingConfig.EndpointsConfig = map[string]*network.EndpointSettings{
+			r.network: {},
+		}
+	}
+
 	created, err := r.docker.ContainerCreate(ctx,
 		&container.Config{
 			Image: r.image,
@@ -127,7 +139,7 @@ func (r *SessionRunner) StartSession(ctx context.Context, req agentsvc.RunAgentT
 			// (docker logs <id>) for a while after the run finishes.
 			AutoRemove: false,
 		},
-		&network.NetworkingConfig{}, nil, "",
+		&networkingConfig, nil, "",
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to create aider container: %w", err)

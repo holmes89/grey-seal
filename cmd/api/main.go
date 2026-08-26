@@ -150,7 +150,7 @@ func main() {
 		}
 
 		agentRunRepo := &repo.AgentRunRepo{Conn: store}
-		runner, err := aiderrunner.NewSessionRunner(aiderImage, litellmBaseURL, os.Getenv("LITELLM_API_KEY"), litellmModel, logger)
+		runner, err := aiderrunner.NewSessionRunner(aiderImage, litellmBaseURL, os.Getenv("LITELLM_API_KEY"), litellmModel, os.Getenv("AIDER_RUNNER_NETWORK"), logger)
 		if err != nil {
 			logger.Warn("failed to create aider session runner — agent service route disabled", zap.Error(err))
 		} else {
