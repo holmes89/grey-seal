@@ -44,8 +44,17 @@ git checkout -b "$PUSH_BRANCH"
 START_SHA=$(git rev-parse HEAD)
 
 echo "running aider (model=openai/${AIDER_MODEL})"
+# --edit-format whole: local/quantized models struggle to follow the default
+# diff (SEARCH/REPLACE) format, which requires reproducing exact original
+# file text before replacing it — aider's own troubleshooting docs recommend
+# "whole" for exactly this case (the LLM returns the full updated file
+# instead). Observed live without this flag: the model wrote plausible code
+# into brand-new files named after the TODO description text instead of
+# editing the real file, so "aider made a commit" looked like success while
+# the actual TODO(agent) markers were untouched.
 aider --yes-always --no-check-update --no-gitignore \
   --model "openai/${AIDER_MODEL}" \
+  --edit-format whole \
   --message "$TASK_DESCRIPTION"
 
 END_SHA=$(git rev-parse HEAD)
