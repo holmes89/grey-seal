@@ -9,7 +9,14 @@ set -euo pipefail
 
 : "${REPO_URL:?REPO_URL is required}"
 : "${PUSH_BRANCH:?PUSH_BRANCH is required}"
-: "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+# file:// repos are beaver's local-only mode (a bare repo on a bind-mounted
+# host directory, not a real GitHub remote) — no token needed to clone/push
+# a local path, and the AUTH_URL substitution below is already a no-op for
+# non-https:// URLs.
+case "$REPO_URL" in
+  file://*) ;;
+  *) : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}" ;;
+esac
 : "${TASK_DESCRIPTION:?TASK_DESCRIPTION is required}"
 : "${OPENAI_API_BASE:?OPENAI_API_BASE is required}"
 : "${OPENAI_API_KEY:?OPENAI_API_KEY is required}"

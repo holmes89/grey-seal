@@ -49,6 +49,7 @@ type SessionRunner struct {
 	litellmAPIKey  string
 	litellmModel   string
 	network        string
+	dataDir        string
 	logger         *zap.Logger
 
 	reapGrace    time.Duration
@@ -64,16 +65,21 @@ type SessionRunner struct {
 // containers after a grace window (see reapLoop). networkName attaches
 // spawned Aider containers to that Docker network so they can resolve
 // sibling services (litellm, etc.) by name; when empty, containers land on
-// the daemon's default bridge network as before.
-func NewSessionRunner(image, litellmBaseURL, litellmAPIKey, litellmModel, networkName string, logger *zap.Logger) (*SessionRunner, error) {
+// the daemon's default bridge network as before. dataDir is a *host*
+// path (this package spawns sibling containers via a mounted docker.sock,
+// so only host paths can be bind-mounted) bind-mounted at /data — lets a
+// caller like beaver share a local, non-GitHub git repo with the spawned
+// container by writing to the same host directory; empty disables the
+// mount.
+func NewSessionRunner(image, litellmBaseURL, litellmAPIKey, litellmModel, networkName, dataDir string, logger *zap.Logger) (*SessionRunner, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
-	return newSessionRunner(cli, image, litellmBaseURL, litellmAPIKey, litellmModel, networkName, logger), nil
+	return newSessionRunner(cli, image, litellmBaseURL, litellmAPIKey, litellmModel, networkName, dataDir, logger), nil
 }
 
-func newSessionRunner(docker dockerClient, image, litellmBaseURL, litellmAPIKey, litellmModel, networkName string, logger *zap.Logger) *SessionRunner {
+func newSessionRunner(docker dockerClient, image, litellmBaseURL, litellmAPIKey, litellmModel, networkName, dataDir string, logger *zap.Logger) *SessionRunner {
 	r := &SessionRunner{
 		docker:         docker,
 		image:          image,
@@ -81,6 +87,7 @@ func newSessionRunner(docker dockerClient, image, litellmBaseURL, litellmAPIKey,
 		litellmAPIKey:  litellmAPIKey,
 		litellmModel:   litellmModel,
 		network:        networkName,
+		dataDir:        dataDir,
 		logger:         logger,
 		reapGrace:      defaultReapGrace,
 		reapInterval:   defaultReapInterval,
@@ -125,6 +132,16 @@ func (r *SessionRunner) StartSession(ctx context.Context, req agentsvc.RunAgentT
 		}
 	}
 
+	hostConfig := &container.HostConfig{
+		// AutoRemove is deliberately off — the reaper goroutine owns
+		// removal after a grace window, so logs remain inspectable
+		// (docker logs <id>) for a while after the run finishes.
+		AutoRemove: false,
+	}
+	if r.dataDir != "" {
+		hostConfig.Binds = []string{r.dataDir + ":/data"}
+	}
+
 	created, err := r.docker.ContainerCreate(ctx,
 		&container.Config{
 			Image: r.image,
@@ -133,12 +150,7 @@ func (r *SessionRunner) StartSession(ctx context.Context, req agentsvc.RunAgentT
 			// StreamSession can read logs as plain lines.
 			Tty: true,
 		},
-		&container.HostConfig{
-			// AutoRemove is deliberately off — the reaper goroutine owns
-			// removal after a grace window, so logs remain inspectable
-			// (docker logs <id>) for a while after the run finishes.
-			AutoRemove: false,
-		},
+		hostConfig,
 		&networkingConfig, nil, "",
 	)
 	if err != nil {

@@ -171,8 +171,46 @@ func TestWatchForCompletion_FailedDoesNotOpenPullRequest(t *testing.T) {
 	if got := pr.callCount(); got != 0 {
 		t.Fatalf("expected OpenPullRequest not called, got %d calls", got)
 	}
-	if run := repo.latest("run-1"); run.GetPrUrl() != "" {
+	run := repo.latest("run-1")
+	if run.GetPrUrl() != "" {
 		t.Fatalf("expected no PrUrl recorded, got %q", run.GetPrUrl())
+	}
+	// Regression: a failed outcome used to leave Error empty, indistinguishable
+	// from a success still waiting on its PR — see the aider-local-mode plan.
+	if run.GetError() == "" {
+		t.Fatal("expected a failed outcome to record a non-empty Error")
+	}
+}
+
+func TestWatchForCompletion_FailedTwice_DoesNotOverwriteFirstError(t *testing.T) {
+	runner := &fakeRunner{statusSequence: []statusResult{{"idle", "failed"}, {"idle", "failed"}}}
+	repo := newFakeRepo(&greysealv1.AgentRun{Uuid: "run-1", Error: "first failure reason"})
+	svc := newTestService(runner, repo, &fakePROpener{})
+
+	svc.applyStatus(context.Background(), watchParams{runUUID: "run-1", sessionID: "session-123"}, "idle", "failed")
+
+	if run := repo.latest("run-1"); run.GetError() != "first failure reason" {
+		t.Fatalf("expected the original Error to be preserved, got %q", run.GetError())
+	}
+}
+
+func TestWatchForCompletion_SatisfiedWithLocalRepo_DoesNotOpenPullRequest(t *testing.T) {
+	runner := &fakeRunner{statusSequence: []statusResult{{"idle", "satisfied"}}}
+	repo := newFakeRepo(&greysealv1.AgentRun{Uuid: "run-1"})
+	pr := &fakePROpener{returned: "https://github.com/holmes89/firefly/pull/1"}
+	svc := newTestService(runner, repo, pr)
+
+	svc.watchForCompletion(context.Background(), watchParams{
+		runUUID: "run-1", sessionID: "session-123",
+		repoURL: "file:///data/beaver-agent-repos/build-1.git",
+		branch:  "agent/run-1",
+	})
+
+	if got := pr.callCount(); got != 0 {
+		t.Fatalf("expected OpenPullRequest not called for a file:// repo, got %d calls", got)
+	}
+	if run := repo.latest("run-1"); run.GetPrUrl() != "" {
+		t.Fatalf("expected no PrUrl recorded for a file:// repo, got %q", run.GetPrUrl())
 	}
 }
 

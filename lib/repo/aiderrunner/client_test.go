@@ -31,12 +31,14 @@ type fakeDockerClient struct {
 	removeFn  func(ctx context.Context, containerID string, options container.RemoveOptions) error
 
 	lastCreateConfig     *container.Config
+	lastHostConfig       *container.HostConfig
 	lastNetworkingConfig *network.NetworkingConfig
 	removedIDs           []string
 }
 
 func (f *fakeDockerClient) ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error) {
 	f.lastCreateConfig = config
+	f.lastHostConfig = hostConfig
 	f.lastNetworkingConfig = networkingConfig
 	if f.createFn != nil {
 		return f.createFn(ctx, config, hostConfig, networkingConfig, platform, containerName)
@@ -87,6 +89,7 @@ func newTestRunner(fake *fakeDockerClient) *SessionRunner {
 		litellmAPIKey:  "sk-test",
 		litellmModel:   "qwen-coder",
 		network:        "",
+		dataDir:        "",
 		logger:         zap.NewNop(),
 		reapGrace:      defaultReapGrace,
 		reapInterval:   defaultReapInterval,
@@ -160,6 +163,35 @@ func TestStartSession_NoNetworkConfiguredLeavesEndpointsEmpty(t *testing.T) {
 
 	require.NotNil(t, fake.lastNetworkingConfig)
 	assert.Empty(t, fake.lastNetworkingConfig.EndpointsConfig)
+}
+
+func TestStartSession_AttachesConfiguredDataDirBind(t *testing.T) {
+	fake := &fakeDockerClient{}
+	r := newTestRunner(fake)
+	r.dataDir = "/home/joel/data/joel.holmes.haus"
+
+	_, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
+		RepoURL:    "https://github.com/owner/repo",
+		PushBranch: "agent/run-1",
+	})
+	require.NoError(t, err)
+
+	require.NotNil(t, fake.lastHostConfig)
+	assert.Contains(t, fake.lastHostConfig.Binds, "/home/joel/data/joel.holmes.haus:/data")
+}
+
+func TestStartSession_NoDataDirConfiguredLeavesBindsEmpty(t *testing.T) {
+	fake := &fakeDockerClient{}
+	r := newTestRunner(fake) // dataDir is "" by default
+
+	_, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
+		RepoURL:    "https://github.com/owner/repo",
+		PushBranch: "agent/run-1",
+	})
+	require.NoError(t, err)
+
+	require.NotNil(t, fake.lastHostConfig)
+	assert.Empty(t, fake.lastHostConfig.Binds)
 }
 
 func TestStartSession_OmitsBaseBranchWhenUnset(t *testing.T) {

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -192,7 +193,11 @@ func (srv *agentService) applyStatus(ctx context.Context, p watchParams, status,
 	run.Status = status
 	run.UpdatedAt = timestamppb.New(time.Now())
 
-	if outcomeResult == "satisfied" && run.PrUrl == "" {
+	// file:// repo URLs are beaver's local-only mode (no GitHub remote to
+	// open a PR against — see the aider-local-mode plan) — the caller
+	// reads success/failure by attempting to clone the agent's branch
+	// directly, so pr_url intentionally stays empty for these runs.
+	if outcomeResult == "satisfied" && run.PrUrl == "" && !strings.HasPrefix(p.repoURL, "file://") {
 		prURL, err := srv.prOpener.OpenPullRequest(ctx, OpenPullRequestRequest{
 			RepoURL: p.repoURL,
 			Branch:  p.branch,
@@ -210,6 +215,8 @@ func (srv *agentService) applyStatus(ctx context.Context, p watchParams, status,
 				zap.String("uuid", p.runUUID), zap.String("pr_url", prURL))
 			run.PrUrl = prURL
 		}
+	} else if outcomeResult == "failed" && run.Error == "" {
+		run.Error = "agent run did not produce a satisfying result"
 	}
 
 	if err := srv.repo.Update(ctx, p.runUUID, run); err != nil {
