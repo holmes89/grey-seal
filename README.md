@@ -54,6 +54,7 @@ The compose file starts PostgreSQL, Qdrant, Ollama, Redpanda, the API server, an
 | `LITELLM_MODEL` | `qwen-coder` | Model name as configured in `litellm-config.yaml` |
 | `AIDER_RUNNER_IMAGE` | `ghcr.io/holmes89/greyseal-aider-runner:latest` | Image used for each agent run's disposable container (see `docker/aider-runner`) |
 | `AIDER_RUNNER_NETWORK` | _(unset)_ | Docker network to attach each agent run's container to, so it can resolve `litellm` (and other compose services) by hostname — set to the compose project's network name (e.g. `joelholmeshaus_web`) in production. Unset leaves containers on the daemon's default bridge network |
+| `AIDER_RUNNER_DATA_DIR` | _(unset)_ | Host path bind-mounted at `/data` in each agent run's container — lets a caller like beaver share a local, non-GitHub bare git repo with the spawned container by writing to the same host directory (beaver's local-only "implement TODOs" mode, no repo URL required). Unset disables the mount |
 
 #### Worker (`cmd/worker/main.go`)
 
