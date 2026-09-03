@@ -24,6 +24,8 @@
     - [AgentRunEvent](#schemas-greyseal-services-v1-AgentRunEvent)
     - [GetAgentRunRequest](#schemas-greyseal-services-v1-GetAgentRunRequest)
     - [GetAgentRunResponse](#schemas-greyseal-services-v1-GetAgentRunResponse)
+    - [ListAgentRunsRequest](#schemas-greyseal-services-v1-ListAgentRunsRequest)
+    - [ListAgentRunsResponse](#schemas-greyseal-services-v1-ListAgentRunsResponse)
     - [RunAgentTaskRequest](#schemas-greyseal-services-v1-RunAgentTaskRequest)
     - [RunAgentTaskResponse](#schemas-greyseal-services-v1-RunAgentTaskResponse)
     - [StreamAgentRunRequest](#schemas-greyseal-services-v1-StreamAgentRunRequest)
@@ -331,6 +333,38 @@ AgentRunEvent is one relayed event from a running agent session.
 
 
 
+<a name="schemas-greyseal-services-v1-ListAgentRunsRequest"></a>
+
+### ListAgentRunsRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| status | [string](#string) | optional | status filters to exactly this value (e.g. &#34;running&#34;, &#34;idle&#34;, &#34;terminated&#34;) when set; unset/empty returns every run. |
+| count | [int32](#int32) | optional | count caps the number of runs returned (newest-first); 0/unset means no cap. |
+
+
+
+
+
+
+<a name="schemas-greyseal-services-v1-ListAgentRunsResponse"></a>
+
+### ListAgentRunsResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| data | [schemas.greyseal.v1.AgentRun](#schemas-greyseal-v1-AgentRun) | repeated |  |
+| count | [int32](#int32) |  |  |
+
+
+
+
+
+
 <a name="schemas-greyseal-services-v1-RunAgentTaskRequest"></a>
 
 ### RunAgentTaskRequest
@@ -396,6 +430,7 @@ AgentRunEvent is one relayed event from a running agent session.
 | ----------- | ------------ | ------------- | ------------|
 | RunAgentTask | [RunAgentTaskRequest](#schemas-greyseal-services-v1-RunAgentTaskRequest) | [RunAgentTaskResponse](#schemas-greyseal-services-v1-RunAgentTaskResponse) | RunAgentTask starts a new agentic coding-task run and returns immediately with its initial state; the run continues asynchronously on the provider&#39;s side. |
 | GetAgentRun | [GetAgentRunRequest](#schemas-greyseal-services-v1-GetAgentRunRequest) | [GetAgentRunResponse](#schemas-greyseal-services-v1-GetAgentRunResponse) | GetAgentRun returns the current state of a previously started run. |
+| ListAgentRuns | [ListAgentRunsRequest](#schemas-greyseal-services-v1-ListAgentRunsRequest) | [ListAgentRunsResponse](#schemas-greyseal-services-v1-ListAgentRunsResponse) | ListAgentRuns returns runs newest-first, optionally filtered by status. |
 | StreamAgentRun | [StreamAgentRunRequest](#schemas-greyseal-services-v1-StreamAgentRunRequest) | [AgentRunEvent](#schemas-greyseal-services-v1-AgentRunEvent) stream | StreamAgentRun streams events for a run as they occur, until the run reaches a terminal status. |
 
  

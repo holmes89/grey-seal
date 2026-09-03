@@ -246,6 +246,114 @@ func (x *GetAgentRunResponse) GetData() *v1.AgentRun {
 	return nil
 }
 
+type ListAgentRunsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// status filters to exactly this value (e.g. "running", "idle",
+	// "terminated") when set; unset/empty returns every run.
+	Status *string `protobuf:"bytes,1,opt,name=status,proto3,oneof" json:"status,omitempty"`
+	// count caps the number of runs returned (newest-first); 0/unset means
+	// no cap.
+	Count         *int32 `protobuf:"varint,2,opt,name=count,proto3,oneof" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentRunsRequest) Reset() {
+	*x = ListAgentRunsRequest{}
+	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentRunsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentRunsRequest) ProtoMessage() {}
+
+func (x *ListAgentRunsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentRunsRequest.ProtoReflect.Descriptor instead.
+func (*ListAgentRunsRequest) Descriptor() ([]byte, []int) {
+	return file_schemas_greyseal_v1_services_agent_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListAgentRunsRequest) GetStatus() string {
+	if x != nil && x.Status != nil {
+		return *x.Status
+	}
+	return ""
+}
+
+func (x *ListAgentRunsRequest) GetCount() int32 {
+	if x != nil && x.Count != nil {
+		return *x.Count
+	}
+	return 0
+}
+
+type ListAgentRunsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Data          []*v1.AgentRun         `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
+	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentRunsResponse) Reset() {
+	*x = ListAgentRunsResponse{}
+	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentRunsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentRunsResponse) ProtoMessage() {}
+
+func (x *ListAgentRunsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentRunsResponse.ProtoReflect.Descriptor instead.
+func (*ListAgentRunsResponse) Descriptor() ([]byte, []int) {
+	return file_schemas_greyseal_v1_services_agent_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ListAgentRunsResponse) GetData() []*v1.AgentRun {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ListAgentRunsResponse) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
 type StreamAgentRunRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uuid          string                 `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
@@ -255,7 +363,7 @@ type StreamAgentRunRequest struct {
 
 func (x *StreamAgentRunRequest) Reset() {
 	*x = StreamAgentRunRequest{}
-	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[4]
+	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -267,7 +375,7 @@ func (x *StreamAgentRunRequest) String() string {
 func (*StreamAgentRunRequest) ProtoMessage() {}
 
 func (x *StreamAgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[4]
+	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -280,7 +388,7 @@ func (x *StreamAgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamAgentRunRequest.ProtoReflect.Descriptor instead.
 func (*StreamAgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_schemas_greyseal_v1_services_agent_proto_rawDescGZIP(), []int{4}
+	return file_schemas_greyseal_v1_services_agent_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *StreamAgentRunRequest) GetUuid() string {
@@ -307,7 +415,7 @@ type AgentRunEvent struct {
 
 func (x *AgentRunEvent) Reset() {
 	*x = AgentRunEvent{}
-	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[5]
+	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -319,7 +427,7 @@ func (x *AgentRunEvent) String() string {
 func (*AgentRunEvent) ProtoMessage() {}
 
 func (x *AgentRunEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[5]
+	mi := &file_schemas_greyseal_v1_services_agent_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -332,7 +440,7 @@ func (x *AgentRunEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRunEvent.ProtoReflect.Descriptor instead.
 func (*AgentRunEvent) Descriptor() ([]byte, []int) {
-	return file_schemas_greyseal_v1_services_agent_proto_rawDescGZIP(), []int{5}
+	return file_schemas_greyseal_v1_services_agent_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AgentRunEvent) GetType() string {
@@ -373,16 +481,25 @@ const file_schemas_greyseal_v1_services_agent_proto_rawDesc = "" +
 	"\x12GetAgentRunRequest\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\"H\n" +
 	"\x13GetAgentRunResponse\x121\n" +
-	"\x04data\x18\x01 \x01(\v2\x1d.schemas.greyseal.v1.AgentRunR\x04data\"+\n" +
+	"\x04data\x18\x01 \x01(\v2\x1d.schemas.greyseal.v1.AgentRunR\x04data\"c\n" +
+	"\x14ListAgentRunsRequest\x12\x1b\n" +
+	"\x06status\x18\x01 \x01(\tH\x00R\x06status\x88\x01\x01\x12\x19\n" +
+	"\x05count\x18\x02 \x01(\x05H\x01R\x05count\x88\x01\x01B\t\n" +
+	"\a_statusB\b\n" +
+	"\x06_count\"`\n" +
+	"\x15ListAgentRunsResponse\x121\n" +
+	"\x04data\x18\x01 \x03(\v2\x1d.schemas.greyseal.v1.AgentRunR\x04data\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\"+\n" +
 	"\x15StreamAgentRunRequest\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\"U\n" +
 	"\rAgentRunEvent\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x16\n" +
-	"\x06status\x18\x03 \x01(\tR\x06status2\xf5\x02\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status2\xf1\x03\n" +
 	"\fAgentService\x12w\n" +
 	"\fRunAgentTask\x121.schemas.greyseal.services.v1.RunAgentTaskRequest\x1a2.schemas.greyseal.services.v1.RunAgentTaskResponse\"\x00\x12t\n" +
-	"\vGetAgentRun\x120.schemas.greyseal.services.v1.GetAgentRunRequest\x1a1.schemas.greyseal.services.v1.GetAgentRunResponse\"\x00\x12v\n" +
+	"\vGetAgentRun\x120.schemas.greyseal.services.v1.GetAgentRunRequest\x1a1.schemas.greyseal.services.v1.GetAgentRunResponse\"\x00\x12z\n" +
+	"\rListAgentRuns\x122.schemas.greyseal.services.v1.ListAgentRunsRequest\x1a3.schemas.greyseal.services.v1.ListAgentRunsResponse\"\x00\x12v\n" +
 	"\x0eStreamAgentRun\x123.schemas.greyseal.services.v1.StreamAgentRunRequest\x1a+.schemas.greyseal.services.v1.AgentRunEvent\"\x000\x01B\x8c\x02\n" +
 	" com.schemas.greyseal.services.v1B\n" +
 	"AgentProtoP\x01ZIgithub.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services;servicesv1\xa2\x02\x03SGS\xaa\x02\x1cSchemas.Greyseal.Services.V1\xca\x02\x1cSchemas\\Greyseal\\Services\\V1\xe2\x02(Schemas\\Greyseal\\Services\\V1\\GPBMetadata\xea\x02\x1fSchemas::Greyseal::Services::V1b\x06proto3"
@@ -399,30 +516,35 @@ func file_schemas_greyseal_v1_services_agent_proto_rawDescGZIP() []byte {
 	return file_schemas_greyseal_v1_services_agent_proto_rawDescData
 }
 
-var file_schemas_greyseal_v1_services_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_schemas_greyseal_v1_services_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_schemas_greyseal_v1_services_agent_proto_goTypes = []any{
 	(*RunAgentTaskRequest)(nil),   // 0: schemas.greyseal.services.v1.RunAgentTaskRequest
 	(*RunAgentTaskResponse)(nil),  // 1: schemas.greyseal.services.v1.RunAgentTaskResponse
 	(*GetAgentRunRequest)(nil),    // 2: schemas.greyseal.services.v1.GetAgentRunRequest
 	(*GetAgentRunResponse)(nil),   // 3: schemas.greyseal.services.v1.GetAgentRunResponse
-	(*StreamAgentRunRequest)(nil), // 4: schemas.greyseal.services.v1.StreamAgentRunRequest
-	(*AgentRunEvent)(nil),         // 5: schemas.greyseal.services.v1.AgentRunEvent
-	(*v1.AgentRun)(nil),           // 6: schemas.greyseal.v1.AgentRun
+	(*ListAgentRunsRequest)(nil),  // 4: schemas.greyseal.services.v1.ListAgentRunsRequest
+	(*ListAgentRunsResponse)(nil), // 5: schemas.greyseal.services.v1.ListAgentRunsResponse
+	(*StreamAgentRunRequest)(nil), // 6: schemas.greyseal.services.v1.StreamAgentRunRequest
+	(*AgentRunEvent)(nil),         // 7: schemas.greyseal.services.v1.AgentRunEvent
+	(*v1.AgentRun)(nil),           // 8: schemas.greyseal.v1.AgentRun
 }
 var file_schemas_greyseal_v1_services_agent_proto_depIdxs = []int32{
-	6, // 0: schemas.greyseal.services.v1.RunAgentTaskResponse.data:type_name -> schemas.greyseal.v1.AgentRun
-	6, // 1: schemas.greyseal.services.v1.GetAgentRunResponse.data:type_name -> schemas.greyseal.v1.AgentRun
-	0, // 2: schemas.greyseal.services.v1.AgentService.RunAgentTask:input_type -> schemas.greyseal.services.v1.RunAgentTaskRequest
-	2, // 3: schemas.greyseal.services.v1.AgentService.GetAgentRun:input_type -> schemas.greyseal.services.v1.GetAgentRunRequest
-	4, // 4: schemas.greyseal.services.v1.AgentService.StreamAgentRun:input_type -> schemas.greyseal.services.v1.StreamAgentRunRequest
-	1, // 5: schemas.greyseal.services.v1.AgentService.RunAgentTask:output_type -> schemas.greyseal.services.v1.RunAgentTaskResponse
-	3, // 6: schemas.greyseal.services.v1.AgentService.GetAgentRun:output_type -> schemas.greyseal.services.v1.GetAgentRunResponse
-	5, // 7: schemas.greyseal.services.v1.AgentService.StreamAgentRun:output_type -> schemas.greyseal.services.v1.AgentRunEvent
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	8, // 0: schemas.greyseal.services.v1.RunAgentTaskResponse.data:type_name -> schemas.greyseal.v1.AgentRun
+	8, // 1: schemas.greyseal.services.v1.GetAgentRunResponse.data:type_name -> schemas.greyseal.v1.AgentRun
+	8, // 2: schemas.greyseal.services.v1.ListAgentRunsResponse.data:type_name -> schemas.greyseal.v1.AgentRun
+	0, // 3: schemas.greyseal.services.v1.AgentService.RunAgentTask:input_type -> schemas.greyseal.services.v1.RunAgentTaskRequest
+	2, // 4: schemas.greyseal.services.v1.AgentService.GetAgentRun:input_type -> schemas.greyseal.services.v1.GetAgentRunRequest
+	4, // 5: schemas.greyseal.services.v1.AgentService.ListAgentRuns:input_type -> schemas.greyseal.services.v1.ListAgentRunsRequest
+	6, // 6: schemas.greyseal.services.v1.AgentService.StreamAgentRun:input_type -> schemas.greyseal.services.v1.StreamAgentRunRequest
+	1, // 7: schemas.greyseal.services.v1.AgentService.RunAgentTask:output_type -> schemas.greyseal.services.v1.RunAgentTaskResponse
+	3, // 8: schemas.greyseal.services.v1.AgentService.GetAgentRun:output_type -> schemas.greyseal.services.v1.GetAgentRunResponse
+	5, // 9: schemas.greyseal.services.v1.AgentService.ListAgentRuns:output_type -> schemas.greyseal.services.v1.ListAgentRunsResponse
+	7, // 10: schemas.greyseal.services.v1.AgentService.StreamAgentRun:output_type -> schemas.greyseal.services.v1.AgentRunEvent
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_schemas_greyseal_v1_services_agent_proto_init() }
@@ -430,13 +552,14 @@ func file_schemas_greyseal_v1_services_agent_proto_init() {
 	if File_schemas_greyseal_v1_services_agent_proto != nil {
 		return
 	}
+	file_schemas_greyseal_v1_services_agent_proto_msgTypes[4].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_schemas_greyseal_v1_services_agent_proto_rawDesc), len(file_schemas_greyseal_v1_services_agent_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -39,6 +39,9 @@ const (
 	// AgentServiceGetAgentRunProcedure is the fully-qualified name of the AgentService's GetAgentRun
 	// RPC.
 	AgentServiceGetAgentRunProcedure = "/schemas.greyseal.services.v1.AgentService/GetAgentRun"
+	// AgentServiceListAgentRunsProcedure is the fully-qualified name of the AgentService's
+	// ListAgentRuns RPC.
+	AgentServiceListAgentRunsProcedure = "/schemas.greyseal.services.v1.AgentService/ListAgentRuns"
 	// AgentServiceStreamAgentRunProcedure is the fully-qualified name of the AgentService's
 	// StreamAgentRun RPC.
 	AgentServiceStreamAgentRunProcedure = "/schemas.greyseal.services.v1.AgentService/StreamAgentRun"
@@ -52,6 +55,8 @@ type AgentServiceClient interface {
 	RunAgentTask(context.Context, *connect.Request[services.RunAgentTaskRequest]) (*connect.Response[services.RunAgentTaskResponse], error)
 	// GetAgentRun returns the current state of a previously started run.
 	GetAgentRun(context.Context, *connect.Request[services.GetAgentRunRequest]) (*connect.Response[services.GetAgentRunResponse], error)
+	// ListAgentRuns returns runs newest-first, optionally filtered by status.
+	ListAgentRuns(context.Context, *connect.Request[services.ListAgentRunsRequest]) (*connect.Response[services.ListAgentRunsResponse], error)
 	// StreamAgentRun streams events for a run as they occur, until the run
 	// reaches a terminal status.
 	StreamAgentRun(context.Context, *connect.Request[services.StreamAgentRunRequest]) (*connect.ServerStreamForClient[services.AgentRunEvent], error)
@@ -80,6 +85,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("GetAgentRun")),
 			connect.WithClientOptions(opts...),
 		),
+		listAgentRuns: connect.NewClient[services.ListAgentRunsRequest, services.ListAgentRunsResponse](
+			httpClient,
+			baseURL+AgentServiceListAgentRunsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListAgentRuns")),
+			connect.WithClientOptions(opts...),
+		),
 		streamAgentRun: connect.NewClient[services.StreamAgentRunRequest, services.AgentRunEvent](
 			httpClient,
 			baseURL+AgentServiceStreamAgentRunProcedure,
@@ -93,6 +104,7 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 type agentServiceClient struct {
 	runAgentTask   *connect.Client[services.RunAgentTaskRequest, services.RunAgentTaskResponse]
 	getAgentRun    *connect.Client[services.GetAgentRunRequest, services.GetAgentRunResponse]
+	listAgentRuns  *connect.Client[services.ListAgentRunsRequest, services.ListAgentRunsResponse]
 	streamAgentRun *connect.Client[services.StreamAgentRunRequest, services.AgentRunEvent]
 }
 
@@ -104,6 +116,11 @@ func (c *agentServiceClient) RunAgentTask(ctx context.Context, req *connect.Requ
 // GetAgentRun calls schemas.greyseal.services.v1.AgentService.GetAgentRun.
 func (c *agentServiceClient) GetAgentRun(ctx context.Context, req *connect.Request[services.GetAgentRunRequest]) (*connect.Response[services.GetAgentRunResponse], error) {
 	return c.getAgentRun.CallUnary(ctx, req)
+}
+
+// ListAgentRuns calls schemas.greyseal.services.v1.AgentService.ListAgentRuns.
+func (c *agentServiceClient) ListAgentRuns(ctx context.Context, req *connect.Request[services.ListAgentRunsRequest]) (*connect.Response[services.ListAgentRunsResponse], error) {
+	return c.listAgentRuns.CallUnary(ctx, req)
 }
 
 // StreamAgentRun calls schemas.greyseal.services.v1.AgentService.StreamAgentRun.
@@ -120,6 +137,8 @@ type AgentServiceHandler interface {
 	RunAgentTask(context.Context, *connect.Request[services.RunAgentTaskRequest]) (*connect.Response[services.RunAgentTaskResponse], error)
 	// GetAgentRun returns the current state of a previously started run.
 	GetAgentRun(context.Context, *connect.Request[services.GetAgentRunRequest]) (*connect.Response[services.GetAgentRunResponse], error)
+	// ListAgentRuns returns runs newest-first, optionally filtered by status.
+	ListAgentRuns(context.Context, *connect.Request[services.ListAgentRunsRequest]) (*connect.Response[services.ListAgentRunsResponse], error)
 	// StreamAgentRun streams events for a run as they occur, until the run
 	// reaches a terminal status.
 	StreamAgentRun(context.Context, *connect.Request[services.StreamAgentRunRequest], *connect.ServerStream[services.AgentRunEvent]) error
@@ -144,6 +163,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("GetAgentRun")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceListAgentRunsHandler := connect.NewUnaryHandler(
+		AgentServiceListAgentRunsProcedure,
+		svc.ListAgentRuns,
+		connect.WithSchema(agentServiceMethods.ByName("ListAgentRuns")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceStreamAgentRunHandler := connect.NewServerStreamHandler(
 		AgentServiceStreamAgentRunProcedure,
 		svc.StreamAgentRun,
@@ -156,6 +181,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceRunAgentTaskHandler.ServeHTTP(w, r)
 		case AgentServiceGetAgentRunProcedure:
 			agentServiceGetAgentRunHandler.ServeHTTP(w, r)
+		case AgentServiceListAgentRunsProcedure:
+			agentServiceListAgentRunsHandler.ServeHTTP(w, r)
 		case AgentServiceStreamAgentRunProcedure:
 			agentServiceStreamAgentRunHandler.ServeHTTP(w, r)
 		default:
@@ -173,6 +200,10 @@ func (UnimplementedAgentServiceHandler) RunAgentTask(context.Context, *connect.R
 
 func (UnimplementedAgentServiceHandler) GetAgentRun(context.Context, *connect.Request[services.GetAgentRunRequest]) (*connect.Response[services.GetAgentRunResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.AgentService.GetAgentRun is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListAgentRuns(context.Context, *connect.Request[services.ListAgentRunsRequest]) (*connect.Response[services.ListAgentRunsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.AgentService.ListAgentRuns is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) StreamAgentRun(context.Context, *connect.Request[services.StreamAgentRunRequest], *connect.ServerStream[services.AgentRunEvent]) error {

@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	AgentService_RunAgentTask_FullMethodName   = "/schemas.greyseal.services.v1.AgentService/RunAgentTask"
 	AgentService_GetAgentRun_FullMethodName    = "/schemas.greyseal.services.v1.AgentService/GetAgentRun"
+	AgentService_ListAgentRuns_FullMethodName  = "/schemas.greyseal.services.v1.AgentService/ListAgentRuns"
 	AgentService_StreamAgentRun_FullMethodName = "/schemas.greyseal.services.v1.AgentService/StreamAgentRun"
 )
 
@@ -34,6 +35,8 @@ type AgentServiceClient interface {
 	RunAgentTask(ctx context.Context, in *RunAgentTaskRequest, opts ...grpc.CallOption) (*RunAgentTaskResponse, error)
 	// GetAgentRun returns the current state of a previously started run.
 	GetAgentRun(ctx context.Context, in *GetAgentRunRequest, opts ...grpc.CallOption) (*GetAgentRunResponse, error)
+	// ListAgentRuns returns runs newest-first, optionally filtered by status.
+	ListAgentRuns(ctx context.Context, in *ListAgentRunsRequest, opts ...grpc.CallOption) (*ListAgentRunsResponse, error)
 	// StreamAgentRun streams events for a run as they occur, until the run
 	// reaches a terminal status.
 	StreamAgentRun(ctx context.Context, in *StreamAgentRunRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AgentRunEvent], error)
@@ -61,6 +64,16 @@ func (c *agentServiceClient) GetAgentRun(ctx context.Context, in *GetAgentRunReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetAgentRunResponse)
 	err := c.cc.Invoke(ctx, AgentService_GetAgentRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) ListAgentRuns(ctx context.Context, in *ListAgentRunsRequest, opts ...grpc.CallOption) (*ListAgentRunsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAgentRunsResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListAgentRuns_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +109,8 @@ type AgentServiceServer interface {
 	RunAgentTask(context.Context, *RunAgentTaskRequest) (*RunAgentTaskResponse, error)
 	// GetAgentRun returns the current state of a previously started run.
 	GetAgentRun(context.Context, *GetAgentRunRequest) (*GetAgentRunResponse, error)
+	// ListAgentRuns returns runs newest-first, optionally filtered by status.
+	ListAgentRuns(context.Context, *ListAgentRunsRequest) (*ListAgentRunsResponse, error)
 	// StreamAgentRun streams events for a run as they occur, until the run
 	// reaches a terminal status.
 	StreamAgentRun(*StreamAgentRunRequest, grpc.ServerStreamingServer[AgentRunEvent]) error
@@ -114,6 +129,9 @@ func (UnimplementedAgentServiceServer) RunAgentTask(context.Context, *RunAgentTa
 }
 func (UnimplementedAgentServiceServer) GetAgentRun(context.Context, *GetAgentRunRequest) (*GetAgentRunResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAgentRun not implemented")
+}
+func (UnimplementedAgentServiceServer) ListAgentRuns(context.Context, *ListAgentRunsRequest) (*ListAgentRunsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAgentRuns not implemented")
 }
 func (UnimplementedAgentServiceServer) StreamAgentRun(*StreamAgentRunRequest, grpc.ServerStreamingServer[AgentRunEvent]) error {
 	return status.Error(codes.Unimplemented, "method StreamAgentRun not implemented")
@@ -175,6 +193,24 @@ func _AgentService_GetAgentRun_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_ListAgentRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAgentRunsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListAgentRuns(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListAgentRuns_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListAgentRuns(ctx, req.(*ListAgentRunsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_StreamAgentRun_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(StreamAgentRunRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -200,6 +236,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAgentRun",
 			Handler:    _AgentService_GetAgentRun_Handler,
+		},
+		{
+			MethodName: "ListAgentRuns",
+			Handler:    _AgentService_ListAgentRuns_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

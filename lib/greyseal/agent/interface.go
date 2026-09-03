@@ -18,6 +18,14 @@ type AgentService interface {
 	// refreshing it from the live provider session first.
 	GetAgentRun(ctx context.Context, runUUID string) (*greysealv1.AgentRun, error)
 
+	// ListAgentRuns returns runs newest-first, optionally restricted to the
+	// given status ("" for no filter). Reads persisted state directly —
+	// every in-flight run already has its own watchForCompletion goroutine
+	// keeping status current every pollInterval, so a live per-run provider
+	// refresh (as GetAgentRun does) isn't needed and would be wasteful
+	// across a whole list.
+	ListAgentRuns(ctx context.Context, status string, limit uint) ([]*greysealv1.AgentRun, error)
+
 	// StreamAgentRun streams events for a run as they occur. The stream
 	// callback is invoked once per event; returning an error aborts
 	// streaming. Returns once the run reaches a terminal status or ctx is
@@ -108,4 +116,5 @@ type AgentRunRepository interface {
 	Create(ctx context.Context, run *greysealv1.AgentRun) error
 	Update(ctx context.Context, id string, run *greysealv1.AgentRun) error
 	Get(ctx context.Context, id string) (*greysealv1.AgentRun, error)
+	List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*greysealv1.AgentRun, error)
 }

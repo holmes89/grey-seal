@@ -62,6 +62,36 @@ func (_m *MockAgentRunRepository) Get(ctx context.Context, id string) (*greyseal
 	return r0, r1
 }
 
+// List provides a mock function with given fields: ctx, cursor, limit, filter
+func (_m *MockAgentRunRepository) List(ctx context.Context, cursor string, limit uint, filter map[string][]interface{}) ([]*greysealv1.AgentRun, error) {
+	ret := _m.Called(ctx, cursor, limit, filter)
+
+	if len(ret) == 0 {
+		panic("no return value specified for List")
+	}
+
+	var r0 []*greysealv1.AgentRun
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint, map[string][]interface{}) ([]*greysealv1.AgentRun, error)); ok {
+		return rf(ctx, cursor, limit, filter)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint, map[string][]interface{}) []*greysealv1.AgentRun); ok {
+		r0 = rf(ctx, cursor, limit, filter)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*greysealv1.AgentRun)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, uint, map[string][]interface{}) error); ok {
+		r1 = rf(ctx, cursor, limit, filter)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Update provides a mock function with given fields: ctx, id, run
 func (_m *MockAgentRunRepository) Update(ctx context.Context, id string, run *greysealv1.AgentRun) error {
 	ret := _m.Called(ctx, id, run)
