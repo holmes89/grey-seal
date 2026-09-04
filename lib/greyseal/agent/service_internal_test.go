@@ -94,6 +94,37 @@ func (f *fakeRepo) Get(ctx context.Context, id string) (*greysealv1.AgentRun, er
 	return run, nil
 }
 
+func (f *fakeRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*greysealv1.AgentRun, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	var wantStatuses []any
+	if filter != nil {
+		wantStatuses = filter["status"]
+	}
+
+	var runs []*greysealv1.AgentRun
+	for _, run := range f.runs {
+		if len(wantStatuses) > 0 {
+			matched := false
+			for _, s := range wantStatuses {
+				if s == run.GetStatus() {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+		runs = append(runs, run)
+	}
+	if limit > 0 && uint(len(runs)) > limit {
+		runs = runs[:limit]
+	}
+	return runs, nil
+}
+
 func (f *fakeRepo) latest(id string) *greysealv1.AgentRun {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -284,5 +315,43 @@ func TestWithBranchInstructions(t *testing.T) {
 	}
 	if !strings.Contains(got, "do the task") {
 		t.Fatal("expected the original task description to be preserved")
+	}
+}
+
+func TestListAgentRuns_NoFilter_ReturnsEverything(t *testing.T) {
+	repo := &fakeRepo{runs: map[string]*greysealv1.AgentRun{
+		"run-1": {Uuid: "run-1", Status: "running"},
+		"run-2": {Uuid: "run-2", Status: "terminated"},
+	}}
+	svc := newTestService(&fakeRunner{}, repo, &fakePROpener{})
+
+	runs, err := svc.ListAgentRuns(context.Background(), "", 0)
+	if err != nil {
+		t.Fatalf("ListAgentRuns: %v", err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("expected 2 runs with no filter, got %d", len(runs))
+	}
+}
+
+func TestListAgentRuns_StatusFilter_OnlyMatchingReturned(t *testing.T) {
+	repo := &fakeRepo{runs: map[string]*greysealv1.AgentRun{
+		"run-1": {Uuid: "run-1", Status: "running"},
+		"run-2": {Uuid: "run-2", Status: "terminated"},
+		"run-3": {Uuid: "run-3", Status: "running"},
+	}}
+	svc := newTestService(&fakeRunner{}, repo, &fakePROpener{})
+
+	runs, err := svc.ListAgentRuns(context.Background(), "running", 0)
+	if err != nil {
+		t.Fatalf("ListAgentRuns: %v", err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("expected 2 running runs, got %d", len(runs))
+	}
+	for _, r := range runs {
+		if r.GetStatus() != "running" {
+			t.Fatalf("expected only running runs, got one with status %q", r.GetStatus())
+		}
 	}
 }

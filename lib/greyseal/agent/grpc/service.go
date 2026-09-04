@@ -42,6 +42,17 @@ func (h *AgentHandler) GetAgentRun(ctx context.Context, req *connect.Request[ser
 	return connect.NewResponse(&services.GetAgentRunResponse{Data: run}), nil
 }
 
+func (h *AgentHandler) ListAgentRuns(ctx context.Context, req *connect.Request[services.ListAgentRunsRequest]) (*connect.Response[services.ListAgentRunsResponse], error) {
+	runs, err := h.svc.ListAgentRuns(ctx, req.Msg.GetStatus(), uint(req.Msg.GetCount()))
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&services.ListAgentRunsResponse{
+		Data:  runs,
+		Count: int32(len(runs)),
+	}), nil
+}
+
 // StreamAgentRun relays events for a run as they occur.
 func (h *AgentHandler) StreamAgentRun(ctx context.Context, req *connect.Request[services.StreamAgentRunRequest], stream *connect.ServerStream[services.AgentRunEvent]) error {
 	return h.svc.StreamAgentRun(ctx, req.Msg.GetUuid(), func(event entity.AgentRunEvent) error {

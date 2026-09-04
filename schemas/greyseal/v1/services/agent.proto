@@ -14,6 +14,9 @@ service AgentService {
   // GetAgentRun returns the current state of a previously started run.
   rpc GetAgentRun(GetAgentRunRequest) returns (GetAgentRunResponse) {}
 
+  // ListAgentRuns returns runs newest-first, optionally filtered by status.
+  rpc ListAgentRuns(ListAgentRunsRequest) returns (ListAgentRunsResponse) {}
+
   // StreamAgentRun streams events for a run as they occur, until the run
   // reaches a terminal status.
   rpc StreamAgentRun(StreamAgentRunRequest) returns (stream AgentRunEvent) {}
@@ -46,6 +49,20 @@ message GetAgentRunRequest {
 
 message GetAgentRunResponse {
   schemas.greyseal.v1.AgentRun data = 1;
+}
+
+message ListAgentRunsRequest {
+  // status filters to exactly this value (e.g. "running", "idle",
+  // "terminated") when set; unset/empty returns every run.
+  optional string status = 1;
+  // count caps the number of runs returned (newest-first); 0/unset means
+  // no cap.
+  optional int32 count = 2;
+}
+
+message ListAgentRunsResponse {
+  repeated schemas.greyseal.v1.AgentRun data = 1;
+  int32 count = 2;
 }
 
 message StreamAgentRunRequest {

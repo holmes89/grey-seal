@@ -257,6 +257,19 @@ func (srv *agentService) GetAgentRun(ctx context.Context, runUUID string) (*grey
 	return run, nil
 }
 
+func (srv *agentService) ListAgentRuns(ctx context.Context, status string, limit uint) ([]*greysealv1.AgentRun, error) {
+	filter := map[string][]any{}
+	if status != "" {
+		filter["status"] = []any{status}
+	}
+	runs, err := srv.repo.List(ctx, "", limit, filter)
+	if err != nil {
+		srv.logger.Error("failed to list agent runs", zap.Error(err))
+		return nil, err
+	}
+	return runs, nil
+}
+
 func (srv *agentService) StreamAgentRun(ctx context.Context, runUUID string, stream func(event AgentRunEvent) error) error {
 	run, err := srv.repo.Get(ctx, runUUID)
 	if err != nil {
