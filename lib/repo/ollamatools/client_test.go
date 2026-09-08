@@ -41,9 +41,10 @@ func (s *ClientSuite) TestChat_ParsesToolCalls() {
 	require.Equal(s.T(), "Do a thing", msg.ToolCalls[0].Function.Arguments["title"])
 	require.Equal(s.T(), true, msg.ToolCalls[0].Function.Arguments["draft"])
 
-	// the request carried stream:false and the tool definition
+	// the request carried stream:false, the tool definition, and a low temperature
 	require.Equal(s.T(), false, gotReq["stream"])
 	require.NotEmpty(s.T(), gotReq["tools"])
+	require.Equal(s.T(), 0.2, gotReq["options"].(map[string]any)["temperature"])
 }
 
 func (s *ClientSuite) TestChat_PlainMessage() {
