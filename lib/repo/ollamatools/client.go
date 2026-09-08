@@ -75,12 +75,17 @@ func NewTool(name, description string, parameters map[string]any) Tool {
 }
 
 type chatRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Tools    []Tool    `json:"tools,omitempty"`
-	Stream   bool      `json:"stream"`
-	Think    bool      `json:"think"`
+	Model    string         `json:"model"`
+	Messages []Message      `json:"messages"`
+	Tools    []Tool         `json:"tools,omitempty"`
+	Stream   bool           `json:"stream"`
+	Think    bool           `json:"think"`
+	Options  map[string]any `json:"options,omitempty"`
 }
+
+// lowTemp keeps the tool-decision loop deterministic — a wandering sampler
+// makes small local models skip tool calls.
+var lowTemp = map[string]any{"temperature": 0.2}
 
 type chatResponse struct {
 	Message    Message `json:"message"`
@@ -97,6 +102,7 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, too
 		Tools:    tools,
 		Stream:   false,
 		Think:    false,
+		Options:  lowTemp,
 	})
 	if err != nil {
 		return Message{}, fmt.Errorf("marshal chat request: %w", err)

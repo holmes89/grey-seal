@@ -2,8 +2,10 @@ package ollamarunner_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,62 +27,139 @@ type RunnerSuite struct {
 
 func TestRunnerSuite(t *testing.T) { suite.Run(t, new(RunnerSuite)) }
 
-// ollamaStub serves: call 1 → a create_ticket tool call; call 2 → a plain
-// "done" message.
-func ollamaStub() *httptest.Server {
-	var calls atomic.Int32
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if calls.Add(1) == 1 {
-			_, _ = w.Write([]byte(`{"message":{"role":"assistant","tool_calls":[{"function":{"name":"create_ticket","arguments":{"project_uuid":"p1","title":"Add X","draft":true}}}]},"done":true}` + "\n"))
-			return
+// ollamaScript serves the given response bodies in order (the last one is
+// repeated once exhausted) and records every request body it received.
+type ollamaScript struct {
+	srv      *httptest.Server
+	mu       sync.Mutex
+	requests []string
+}
+
+func newOllamaScript(bodies ...string) *ollamaScript {
+	s := &ollamaScript{}
+	var i atomic.Int32
+	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		s.mu.Lock()
+		s.requests = append(s.requests, string(body))
+		s.mu.Unlock()
+		n := int(i.Add(1)) - 1
+		if n >= len(bodies) {
+			n = len(bodies) - 1
 		}
-		_, _ = w.Write([]byte(`{"message":{"role":"assistant","content":"created 1 draft ticket"},"done":true}` + "\n"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(bodies[n] + "\n"))
 	}))
+	return s
+}
+
+func (s *ollamaScript) reqs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.requests...)
+}
+
+const (
+	respCreateTicket  = `{"message":{"role":"assistant","tool_calls":[{"function":{"name":"create_ticket","arguments":{"project_uuid":"p1","title":"Add X","draft":true}}}]},"done":true}`
+	respDone          = `{"message":{"role":"assistant","content":"created 1 draft ticket"},"done":true}`
+	respProse         = `{"message":{"role":"assistant","content":"Here is how I would break this down: ..."},"done":true}`
+	respThinkThenDone = `{"message":{"role":"assistant","content":"<think>the user wants tickets</think>all done"},"done":true}`
+)
+
+func toolMocks(t *testing.T) (*mocks.MockToolProvider, *mocks.MockToolSession) {
+	sess := mocks.NewMockToolSession(t)
+	sess.On("ListTools", mock.Anything).Return([]agentsvc.ToolDef{
+		{Name: "list_projects", Description: "list", InputSchema: map[string]any{"type": "object"}},
+		{Name: "create_ticket", Description: "create", InputSchema: map[string]any{"type": "object"}},
+	}, nil)
+	sess.On("Close").Return(nil)
+	prov := mocks.NewMockToolProvider(t)
+	prov.On("Session", mock.Anything).Return(sess, nil)
+	return prov, sess
+}
+
+func run(t *testing.T, script *ollamaScript, prov agentsvc.ToolProvider) (string, string) {
+	t.Helper()
+	r := ollamarunner.NewSessionRunner(prov, ollamatools.New(script.srv.URL), "qwen3:8b", zap.NewNop())
+	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
+		Provider: "ollama:qwen3:8b", TaskDescription: "Design: add feature X",
+	})
+	require.NoError(t, err)
+	return waitTerminal(t, r, id)
 }
 
 func (s *RunnerSuite) TestRun_CreatesDraftThenFinishes() {
-	ollama := ollamaStub()
-	defer ollama.Close()
-
-	toolSession := mocks.NewMockToolSession(s.T())
-	toolSession.On("ListTools", mock.Anything).Return([]agentsvc.ToolDef{
-		{Name: "list_projects", Description: "list", InputSchema: map[string]any{"type": "object"}},
-		{Name: "create_ticket", Description: "create", InputSchema: map[string]any{"type": "object"}},
-		{Name: "search_knowledge", Description: "not allowed", InputSchema: map[string]any{"type": "object"}},
-	}, nil)
+	script := newOllamaScript(respCreateTicket, respDone)
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
 	var createArgs map[string]any
-	toolSession.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
-		Run(func(args mock.Arguments) { createArgs = args.Get(2).(map[string]any) }).
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Run(func(a mock.Arguments) { createArgs = a.Get(2).(map[string]any) }).
 		Return(`{"data":{"uuid":"t1","status":"draft"}}`, nil)
-	toolSession.On("Close").Return(nil)
 
-	provider := mocks.NewMockToolProvider(s.T())
-	provider.On("Session", mock.Anything).Return(toolSession, nil)
-
-	r := ollamarunner.NewSessionRunner(provider, ollamatools.New(ollama.URL), "qwen3:8b", zap.NewNop())
-
-	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
-		Provider:        "ollama:qwen3:8b",
-		TaskDescription: "Design: add feature X",
-	})
-	require.NoError(s.T(), err)
-
-	status, outcome := waitTerminal(s.T(), r, id)
+	status, outcome := run(s.T(), script, prov)
 	require.Equal(s.T(), "terminated", status)
 	require.Equal(s.T(), "satisfied", outcome)
 	require.Equal(s.T(), true, createArgs["draft"])
 	require.Equal(s.T(), "p1", createArgs["project_uuid"])
 }
 
-func (s *RunnerSuite) TestRun_ToolSessionFailure() {
-	provider := mocks.NewMockToolProvider(s.T())
-	provider.On("Session", mock.Anything).Return(nil, assertErr{})
+func (s *RunnerSuite) TestRun_NudgesPastAPreTextTurn() {
+	script := newOllamaScript(respProse, respCreateTicket, respDone)
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"data":{"uuid":"t1"}}`, nil)
 
-	r := ollamarunner.NewSessionRunner(provider, ollamatools.New("http://127.0.0.1:0"), "m", zap.NewNop())
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "satisfied", outcome)
+	// the 2nd request must carry the nudge as a user message
+	require.GreaterOrEqual(s.T(), len(script.reqs()), 2)
+	require.Contains(s.T(), script.reqs()[1], "You did not call a tool")
+}
+
+func (s *RunnerSuite) TestRun_FailsWhenNoTicketsCreated() {
+	script := newOllamaScript(respProse) // prose forever
+	defer script.srv.Close()
+	prov, _ := toolMocks(s.T())
+
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "failed", outcome)
+}
+
+func (s *RunnerSuite) TestRun_StripsThinkBlocks() {
+	script := newOllamaScript(respCreateTicket, respThinkThenDone)
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"data":{"uuid":"t1"}}`, nil)
+
+	r := ollamarunner.NewSessionRunner(prov, ollamatools.New(script.srv.URL), "qwen3:8b", zap.NewNop())
 	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
-		Provider:        "ollama:m",
-		TaskDescription: "x",
+		Provider: "ollama:qwen3:8b", TaskDescription: "d",
+	})
+	require.NoError(s.T(), err)
+	waitTerminal(s.T(), r, id)
+
+	var msgs []string
+	_ = r.StreamSession(context.Background(), id, func(e agentsvc.AgentRunEvent) error {
+		msgs = append(msgs, e.Message)
+		return nil
+	})
+	for _, m := range msgs {
+		require.NotContains(s.T(), m, "<think>")
+	}
+}
+
+func (s *RunnerSuite) TestRun_ToolSessionFailure() {
+	prov := mocks.NewMockToolProvider(s.T())
+	prov.On("Session", mock.Anything).Return(nil, assertErr{})
+
+	r := ollamarunner.NewSessionRunner(prov, ollamatools.New("http://127.0.0.1:0"), "m", zap.NewNop())
+	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
+		Provider: "ollama:m", TaskDescription: "x",
 	})
 	require.NoError(s.T(), err)
 

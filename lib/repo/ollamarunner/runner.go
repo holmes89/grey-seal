@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -28,16 +29,26 @@ const (
 	streamPollInterval   = 300 * time.Millisecond
 )
 
-// systemPrompt steers the model through the design→draft-tickets task.
-const systemPrompt = `You turn a software design into a set of DRAFT tickets in a planning system called Rabbit, using the tools provided.
+// systemPrompt steers the model through the design→draft-tickets task. It is
+// deliberately imperative: a descriptive version made qwen3:8b answer with
+// prose and never emit tool_calls.
+const systemPrompt = `You turn a software design into a set of DRAFT tickets in a planning system called Rabbit, using ONLY the tools provided.
 
-Workflow:
-1. Call list_projects and choose the project_uuid that best matches the design. If nothing matches, stop and say so — never invent a UUID.
-2. Break the design into small, independently-actionable units of work.
-3. For each unit, call create_ticket with: project_uuid (from step 1); a short imperative title; a markdown body saying what to do and why; type (one of TICKET_TYPE_FEATURE, TICKET_TYPE_BUG, TICKET_TYPE_TASK); priority (one of PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH); and draft set to true.
-4. When every unit has a ticket, reply with a short plain-text summary listing the titles you created, and do not call any more tools.
+Your FIRST action MUST be to call list_projects. Never write prose before or instead of a tool call.
 
-Rules: every create_ticket call MUST set draft=true and use a real project_uuid from list_projects. Keep tickets small and non-overlapping. Use list_tickets to avoid creating duplicates of tickets that already exist in the project.`
+Then:
+- Pick the project_uuid whose name best matches the design. If none fits, reply with exactly NO_PROJECT and call no tools.
+- Call list_tickets for that project so you do not duplicate tickets that already exist.
+- Break the design into small, independent units of work. For each one call create_ticket with:
+  project_uuid (from list_projects); a short imperative title; a markdown body saying what to do and why;
+  type (one of TICKET_TYPE_FEATURE, TICKET_TYPE_BUG, TICKET_TYPE_TASK);
+  priority (one of PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH);
+  and draft set to true — always.
+- When every unit has a ticket, reply with ONE short summary line listing the titles you created, and call no more tools. Only then may you write prose.`
+
+// nudge is appended once if a turn produces no tool call and nothing has been
+// created yet, so a single stray prose turn cannot end the run.
+const nudge = `You did not call a tool. Call list_projects now — or, if no project matches the design, reply with exactly NO_PROJECT.`
 
 // allowedTools is the subset of the MCP server's tools this provider exposes
 // to the model.
@@ -50,13 +61,13 @@ var allowedTools = map[string]bool{
 
 // SessionRunner drives ollama:<model> agent runs.
 type SessionRunner struct {
-	tools       agentsvc.ToolProvider
-	chat        *ollamatools.Client
-	model       string
-	logger      *zap.Logger
-	maxIter     int
-	runTimeout  time.Duration
-	allowed     map[string]bool
+	tools      agentsvc.ToolProvider
+	chat       *ollamatools.Client
+	model      string
+	logger     *zap.Logger
+	maxIter    int
+	runTimeout time.Duration
+	allowed    map[string]bool
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -190,23 +201,58 @@ func (r *SessionRunner) run(sessionID, design string) {
 	}
 
 	created := 0
+	nudged := false
+
+	finishByCount := func() {
+		if created > 0 {
+			r.emit(sessionID, agentsvc.AgentRunEvent{
+				Type:    "agent.message",
+				Message: fmt.Sprintf("done — created %d draft ticket(s)", created),
+			})
+			r.finish(sessionID, "satisfied")
+			return
+		}
+		r.emit(sessionID, agentsvc.AgentRunEvent{
+			Type:    "agent.message",
+			Message: "no draft tickets were created",
+		})
+		r.finish(sessionID, "failed")
+	}
+
 	for i := 0; i < r.maxIter; i++ {
 		msg, err := r.chat.Chat(ctx, r.model, messages, tools)
 		if err != nil {
 			fail("model call failed: %v", err)
 			return
 		}
+		text := stripThink(msg.Content)
+		msg.Content = text
 		messages = append(messages, msg)
 
 		if len(msg.ToolCalls) == 0 {
-			if strings.TrimSpace(msg.Content) != "" {
-				r.emit(sessionID, agentsvc.AgentRunEvent{Type: "agent.message", Message: msg.Content})
+			if strings.TrimSpace(text) != "" {
+				r.emit(sessionID, agentsvc.AgentRunEvent{Type: "agent.message", Message: text})
 			}
-			r.emit(sessionID, agentsvc.AgentRunEvent{
-				Type:    "agent.message",
-				Message: fmt.Sprintf("done — created %d draft ticket(s)", created),
-			})
-			r.finish(sessionID, "satisfied")
+			if strings.EqualFold(strings.TrimSpace(text), "NO_PROJECT") {
+				r.emit(sessionID, agentsvc.AgentRunEvent{
+					Type:    "agent.message",
+					Message: "no matching project — nothing created",
+				})
+				r.finish(sessionID, "failed")
+				return
+			}
+			// A single stray prose turn before anything is created gets one
+			// explicit nudge rather than silently ending the run.
+			if created == 0 && !nudged {
+				nudged = true
+				messages = append(messages, ollamatools.Message{Role: "user", Content: nudge})
+				r.emit(sessionID, agentsvc.AgentRunEvent{
+					Type:    "agent.message",
+					Message: "model did not call a tool — nudging it to start",
+				})
+				continue
+			}
+			finishByCount()
 			return
 		}
 
@@ -237,7 +283,11 @@ func (r *SessionRunner) run(sessionID, design string) {
 		}
 	}
 
-	fail("reached the %d-iteration cap without finishing (created %d draft ticket(s) so far)", r.maxIter, created)
+	r.emit(sessionID, agentsvc.AgentRunEvent{
+		Type:    "agent.message",
+		Message: fmt.Sprintf("reached the %d-iteration cap; created %d draft ticket(s) so far", r.maxIter, created),
+	})
+	finishByCount()
 }
 
 func (r *SessionRunner) emit(sessionID string, e agentsvc.AgentRunEvent) {
@@ -269,4 +319,13 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+var thinkBlock = regexp.MustCompile(`(?is)<think>.*?</think>`)
+
+// stripThink removes <think>…</think> reasoning blocks — qwen3 can emit them
+// even with think:false on some Ollama builds — so they stay out of the
+// transcript and the event stream.
+func stripThink(s string) string {
+	return strings.TrimSpace(thinkBlock.ReplaceAllString(s, ""))
 }
