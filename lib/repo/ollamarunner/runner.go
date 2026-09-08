@@ -25,8 +25,10 @@ var _ agentsvc.SessionRunner = (*SessionRunner)(nil)
 
 const (
 	defaultMaxIterations = 16
-	defaultRunTimeout    = 10 * time.Minute
-	streamPollInterval   = 300 * time.Millisecond
+	// A CPU-bound local model (qwen3:8b) takes ~1-2 min per turn and a
+	// decomposition run is several turns; keep the ceiling generous.
+	defaultRunTimeout  = 25 * time.Minute
+	streamPollInterval = 300 * time.Millisecond
 )
 
 // systemPrompt steers the model through the design→draft-tickets task. It is
@@ -34,17 +36,23 @@ const (
 // prose and never emit tool_calls.
 const systemPrompt = `You turn a software design into a set of DRAFT tickets in a planning system called Rabbit, using ONLY the tools provided.
 
-Your FIRST action MUST be to call list_projects. Never write prose before or instead of a tool call.
+The projects you may use are listed below, each as "name  <uuid>". Choose the ONE whose name best matches the design and use its uuid verbatim for every project_uuid argument. NEVER pass a project name, a guessed uuid, or all-zeros where a uuid is required. If no listed project fits, reply with exactly NO_PROJECT and call no tools.
 
-Then:
-- Pick the project_uuid whose name best matches the design. If none fits, reply with exactly NO_PROJECT and call no tools.
-- Call list_tickets for that project so you do not duplicate tickets that already exist.
-- Break the design into small, independent units of work. For each one call create_ticket with:
-  project_uuid (from list_projects); a short imperative title; a markdown body saying what to do and why;
-  type (one of TICKET_TYPE_FEATURE, TICKET_TYPE_BUG, TICKET_TYPE_TASK);
-  priority (one of PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH);
-  and draft set to true — always.
+Your FIRST action MUST be a tool call — never write prose first.
+
+Steps:
+- Break the design into small, independent units of work.
+- For each unit call create_ticket with: project_uuid (a uuid from the list below); a short imperative title; a markdown body saying what to do and why; type (one of TICKET_TYPE_FEATURE, TICKET_TYPE_BUG, TICKET_TYPE_TASK); priority (one of PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH); and draft set to true — always.
+- If a create_ticket call returns an error, fix the arguments and try again; do not repeat the same failing call.
 - When every unit has a ticket, reply with ONE short summary line listing the titles you created, and call no more tools. Only then may you write prose.`
+
+// promptWithoutProjectList is the fallback when the runner could not fetch
+// the project list itself (the model must then call list_projects).
+const promptWithoutProjectList = `You turn a software design into a set of DRAFT tickets in Rabbit, using ONLY the tools provided.
+
+Your FIRST action MUST be to call list_projects with NO arguments. Never write prose before or instead of a tool call. list_projects returns projects as {uuid, name}: match the design to one by NAME, then use that project's uuid verbatim for every project_uuid argument — never a name or a guessed uuid. If none matches, reply with exactly NO_PROJECT.
+
+Then, for each small independent unit of work, call create_ticket with: project_uuid (the uuid from list_projects); a short imperative title; a markdown body; type (TICKET_TYPE_FEATURE|BUG|TASK); priority (PRIORITY_LOW|MEDIUM|HIGH); draft: true. When done, reply with one summary line and call no more tools.`
 
 // nudge is appended once if a turn produces no tool call and nothing has been
 // created yet, so a single stray prose turn cannot end the run.
@@ -183,9 +191,21 @@ func (r *SessionRunner) run(sessionID, design string) {
 		fail("could not list tools: %v", err)
 		return
 	}
+	// Resolve the project list ourselves rather than trusting the model to
+	// call list_projects with the right (no) arguments — small local models
+	// stuff the project name into product_uuid and get nothing back.
+	projectList := r.resolveProjects(ctx, ts)
+	sysPrompt := systemPrompt
+	skip := map[string]bool{}
+	if projectList == "" {
+		sysPrompt = promptWithoutProjectList
+	} else {
+		skip["list_projects"] = true // the list is in the prompt; no need to call it
+	}
+
 	tools := make([]ollamatools.Tool, 0, len(defs))
 	for _, d := range defs {
-		if !r.allowed[d.Name] {
+		if !r.allowed[d.Name] || skip[d.Name] {
 			continue
 		}
 		tools = append(tools, ollamatools.NewTool(d.Name, d.Description, d.InputSchema))
@@ -195,9 +215,13 @@ func (r *SessionRunner) run(sessionID, design string) {
 		return
 	}
 
+	userMsg := design
+	if projectList != "" {
+		userMsg = design + "\n\nProjects (use a uuid, never a name):\n" + projectList
+	}
 	messages := []ollamatools.Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: design},
+		{Role: "system", Content: sysPrompt},
+		{Role: "user", Content: userMsg},
 	}
 
 	created := 0
@@ -222,7 +246,16 @@ func (r *SessionRunner) run(sessionID, design string) {
 	for i := 0; i < r.maxIter; i++ {
 		msg, err := r.chat.Chat(ctx, r.model, messages, tools)
 		if err != nil {
-			fail("model call failed: %v", err)
+			// A mid-run model error after tickets already exist is a partial
+			// success, not a hard failure — finishByCount decides.
+			r.emit(sessionID, agentsvc.AgentRunEvent{
+				Type:    "agent.message",
+				Message: fmt.Sprintf("model call failed: %v", err),
+			})
+			if created == 0 {
+				r.logger.Warn("ollama agent run failed", zap.String("session_id", sessionID), zap.Error(err))
+			}
+			finishByCount()
 			return
 		}
 		text := stripThink(msg.Content)
@@ -268,7 +301,7 @@ func (r *SessionRunner) run(sessionID, design string) {
 			content := result
 			if callErr != nil {
 				content = "ERROR: " + callErr.Error()
-			} else if name == "create_ticket" {
+			} else if name == "create_ticket" && ticketCreated(result) {
 				created++
 			}
 			r.emit(sessionID, agentsvc.AgentRunEvent{
@@ -319,6 +352,49 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// resolveProjects calls list_projects (no args) and returns a newline list of
+// "name  <uuid>" rows, or "" if the call failed or returned nothing.
+func (r *SessionRunner) resolveProjects(ctx context.Context, ts agentsvc.ToolSession) string {
+	raw, err := ts.CallTool(ctx, "list_projects", map[string]any{})
+	if err != nil {
+		r.logger.Warn("ollama agent: list_projects failed; falling back to model-driven lookup", zap.Error(err))
+		return ""
+	}
+	var resp struct {
+		Projects []struct {
+			UUID string `json:"uuid"`
+			Name string `json:"name"`
+		} `json:"projects"`
+	}
+	if json.Unmarshal([]byte(raw), &resp) != nil || len(resp.Projects) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, p := range resp.Projects {
+		if p.UUID == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "- %s  %s\n", p.Name, p.UUID)
+	}
+	return b.String()
+}
+
+// ticketCreated reports whether a create_ticket result is a real success (a
+// data object with a uuid) rather than a Connect error envelope returned as
+// text by the backend.
+func ticketCreated(result string) bool {
+	var r struct {
+		Data struct {
+			UUID string `json:"uuid"`
+		} `json:"data"`
+		Code string `json:"code"`
+	}
+	if json.Unmarshal([]byte(result), &r) != nil {
+		return false
+	}
+	return r.Code == "" && r.Data.UUID != ""
 }
 
 var thinkBlock = regexp.MustCompile(`(?is)<think>.*?</think>`)

@@ -47,6 +47,11 @@ func newOllamaScript(bodies ...string) *ollamaScript {
 		if n >= len(bodies) {
 			n = len(bodies) - 1
 		}
+		if bodies[n] == "__ERROR__" {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("boom"))
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(bodies[n] + "\n"))
 	}))
@@ -70,8 +75,12 @@ func toolMocks(t *testing.T) (*mocks.MockToolProvider, *mocks.MockToolSession) {
 	sess := mocks.NewMockToolSession(t)
 	sess.On("ListTools", mock.Anything).Return([]agentsvc.ToolDef{
 		{Name: "list_projects", Description: "list", InputSchema: map[string]any{"type": "object"}},
+		{Name: "list_tickets", Description: "list", InputSchema: map[string]any{"type": "object"}},
 		{Name: "create_ticket", Description: "create", InputSchema: map[string]any{"type": "object"}},
 	}, nil)
+	// the runner resolves the project list itself before the loop
+	sess.On("CallTool", mock.Anything, "list_projects", mock.Anything).
+		Return(`{"projects":[{"uuid":"p1","name":"ahh"}]}`, nil).Maybe()
 	sess.On("Close").Return(nil)
 	prov := mocks.NewMockToolProvider(t)
 	prov.On("Session", mock.Anything).Return(sess, nil)
@@ -117,6 +126,36 @@ func (s *RunnerSuite) TestRun_NudgesPastAPreTextTurn() {
 	// the 2nd request must carry the nudge as a user message
 	require.GreaterOrEqual(s.T(), len(script.reqs()), 2)
 	require.Contains(s.T(), script.reqs()[1], "You did not call a tool")
+}
+
+func (s *RunnerSuite) TestRun_InjectsProjectListAndCountsOnlyRealCreates() {
+	// turn 1 -> create_ticket that the backend rejects (error envelope as text);
+	// turn 2 -> "done".
+	script := newOllamaScript(respCreateTicket, respDone)
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"code":"not_found","message":"project not found"}`, nil)
+
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "failed", outcome) // the create did not actually succeed
+	// the resolved project list was injected into the first prompt
+	require.GreaterOrEqual(s.T(), len(script.reqs()), 1)
+	require.Contains(s.T(), script.reqs()[0], "p1")
+	require.Contains(s.T(), script.reqs()[0], "ahh")
+}
+
+func (s *RunnerSuite) TestRun_PartialSuccessOnModelError() {
+	script := newOllamaScript(respCreateTicket, "__ERROR__")
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"data":{"uuid":"t1"}}`, nil)
+
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "satisfied", outcome) // 1 ticket already created
 }
 
 func (s *RunnerSuite) TestRun_FailsWhenNoTicketsCreated() {
