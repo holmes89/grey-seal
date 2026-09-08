@@ -22,10 +22,10 @@ func TestProvider_ListAndCall(t *testing.T) {
 		return mcp.NewToolResultText("echo: " + req.GetArguments()["message"].(string)), nil
 	})
 
-	ts := mcpserver.NewTestServer(s)
+	ts := mcpserver.NewTestStreamableHTTPServer(s)
 	defer ts.Close()
 
-	p := mcpclient.New(ts.URL+"/sse", zap.NewNop())
+	p := mcpclient.New(ts.URL+"/mcp", zap.NewNop())
 	sess, err := p.Session(context.Background())
 	require.NoError(t, err)
 	defer sess.Close() //nolint:errcheck

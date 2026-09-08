@@ -196,7 +196,7 @@ Orchestrates agentic coding-task runs against Claude via Anthropic's Managed Age
 Two providers are implemented, selected by the `provider` field:
 
 - **`"aider"`** — a code-editing run: `lib/repo/aiderrunner` starts a disposable Aider container against a target repo (backed by LiteLLM + Ollama), and `watchForCompletion` opens a PR via the GitHub REST API once the outcome is satisfied. Gated on `LITELLM_BASE_URL`.
-- **`"ollama:<model>"`** — an in-process tool-calling run with no repo and no PR: `lib/repo/ollamarunner` runs a bounded loop against a local Ollama model (`lib/repo/ollamatools`, `/api/chat` with tools) whose tools come from an MCP server over SSE (`lib/repo/mcpclient` → `agent.ToolProvider`). Used for orchestration tasks such as decomposing a design into DRAFT rabbit tickets. Gated on `REMORA_MCP_URL`; model from `OLLAMA_AGENT_CHAT_MODEL` (default `qwen3:8b`).
+- **`"ollama:<model>"`** — an in-process tool-calling run with no repo and no PR: `lib/repo/ollamarunner` runs a bounded loop against a local Ollama model (`lib/repo/ollamatools`, `/api/chat` with tools) whose tools come from an MCP server over Streamable HTTP (`lib/repo/mcpclient` → `agent.ToolProvider`). Used for orchestration tasks such as decomposing a design into DRAFT rabbit tickets. Gated on `REMORA_MCP_URL`; model from `OLLAMA_AGENT_CHAT_MODEL` (default `qwen3:8b`).
 
 The route registers when at least one provider is configured. State is persisted in the `agent_runs` table (`uuid`, `provider`, `repo_url` — empty for `ollama:` runs, `status`, `session_id`, `pr_url`, `error`, `created_at`, `updated_at`).
 
