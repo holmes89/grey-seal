@@ -1,4 +1,4 @@
-// Package mcpclient adapts an MCP server reached over SSE to
+// Package mcpclient adapts an MCP server reached over Streamable HTTP to
 // agent.ToolProvider / agent.ToolSession. It keeps the mcp-go SDK out of
 // the domain package (mirrors lib/repo/aiderrunner for agent.SessionRunner).
 package mcpclient
@@ -16,29 +16,28 @@ import (
 
 var _ agent.ToolProvider = (*Provider)(nil)
 
-// Provider opens a fresh SSE MCP connection per agent run. mcp-go v0.54.1
-// has no auto-reconnect, and runs are short, so a per-run connection is
-// simpler and safe.
+// Provider opens a fresh Streamable HTTP MCP connection per agent run.
+// Runs are short, so a per-run connection is simpler and safe.
 type Provider struct {
 	url    string
 	logger *zap.Logger
 }
 
-// New returns a Provider for the MCP server's SSE endpoint URL
-// (e.g. "http://remora:8090/sse").
+// New returns a Provider for the MCP server's Streamable HTTP endpoint URL
+// (e.g. "http://remora:8090/mcp").
 func New(url string, logger *zap.Logger) *Provider {
 	return &Provider{url: url, logger: logger}
 }
 
 // Session dials the MCP server, initializes, and returns a ready session.
 func (p *Provider) Session(ctx context.Context) (agent.ToolSession, error) {
-	c, err := mcpclient.NewSSEMCPClient(p.url)
+	c, err := mcpclient.NewStreamableHttpClient(p.url)
 	if err != nil {
-		return nil, fmt.Errorf("create MCP SSE client: %w", err)
+		return nil, fmt.Errorf("create MCP client: %w", err)
 	}
 	if err := c.Start(ctx); err != nil {
 		_ = c.Close()
-		return nil, fmt.Errorf("start MCP SSE client: %w", err)
+		return nil, fmt.Errorf("start MCP client: %w", err)
 	}
 	initReq := mcp.InitializeRequest{}
 	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
