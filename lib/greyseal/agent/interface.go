@@ -89,6 +89,34 @@ type SessionRunner interface {
 	StreamSession(ctx context.Context, sessionID string, stream func(event AgentRunEvent) error) error
 }
 
+// ToolProvider hands out tool sessions for a single agent run. Implemented
+// outside this package (lib/repo/mcpclient) so the domain stays free of any
+// MCP SDK import.
+type ToolProvider interface {
+	// Session opens a fresh tool connection for one run. The caller closes it.
+	Session(ctx context.Context) (ToolSession, error)
+}
+
+// ToolSession is one run's live connection to a tool backend.
+type ToolSession interface {
+	// ListTools returns the tools the backend exposes.
+	ListTools(ctx context.Context) ([]ToolDef, error)
+	// CallTool invokes a tool and returns its result as text (the tool's own
+	// error message when the call failed at the tool level).
+	CallTool(ctx context.Context, name string, args map[string]any) (string, error)
+	// Close releases the connection.
+	Close() error
+}
+
+// ToolDef describes one callable tool. InputSchema is a JSON Schema object
+// ({"type":"object","properties":{…},"required":[…]}) passed straight
+// through to the model as a function-parameters schema.
+type ToolDef struct {
+	Name        string
+	Description string
+	InputSchema map[string]any
+}
+
 // OpenPullRequestRequest describes a PR to open once an agent run's outcome
 // is satisfied.
 type OpenPullRequestRequest struct {

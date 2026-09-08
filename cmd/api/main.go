@@ -25,7 +25,10 @@ import (
 	"github.com/holmes89/grey-seal/lib/repo/aiderrunner"
 	"github.com/holmes89/grey-seal/lib/repo/cache"
 	"github.com/holmes89/grey-seal/lib/repo/github"
+	"github.com/holmes89/grey-seal/lib/repo/mcpclient"
 	"github.com/holmes89/grey-seal/lib/repo/ollama"
+	"github.com/holmes89/grey-seal/lib/repo/ollamarunner"
+	"github.com/holmes89/grey-seal/lib/repo/ollamatools"
 	"github.com/holmes89/grey-seal/lib/repo/transcript"
 	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
 	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1/services"
@@ -136,9 +139,17 @@ func main() {
 	logger.Info("registering conversation service route", zap.String("path", convPath))
 	srv.Handle(convPath, convHandler)
 
-	// Agent service (Aider, run in disposable Docker containers, backed by
-	// LiteLLM + Ollama). Route is skipped entirely if unconfigured, rather
-	// than registered in a broken state.
+	// Agent service. Two independent providers, each optional:
+	//   - "aider": code-editing runs in disposable Docker containers, gated on
+	//     LITELLM_BASE_URL.
+	//   - "ollama:<model>": in-process tool-calling runs (e.g. design →
+	//     draft tickets) with tools from an MCP server, gated on REMORA_MCP_URL.
+	// The route registers when at least one provider is configured.
+	var (
+		aiderRunner  agentsvc.SessionRunner
+		ollamaRunner agentsvc.SessionRunner
+	)
+
 	if litellmBaseURL := os.Getenv("LITELLM_BASE_URL"); litellmBaseURL != "" {
 		aiderImage := os.Getenv("AIDER_RUNNER_IMAGE")
 		if aiderImage == "" {
@@ -148,20 +159,38 @@ func main() {
 		if litellmModel == "" {
 			litellmModel = "qwen-coder"
 		}
-
-		agentRunRepo := &repo.AgentRunRepo{Conn: store}
-		runner, err := aiderrunner.NewSessionRunner(aiderImage, litellmBaseURL, os.Getenv("LITELLM_API_KEY"), litellmModel, os.Getenv("AIDER_RUNNER_NETWORK"), os.Getenv("AIDER_RUNNER_DATA_DIR"), logger)
+		r, err := aiderrunner.NewSessionRunner(aiderImage, litellmBaseURL, os.Getenv("LITELLM_API_KEY"), litellmModel, os.Getenv("AIDER_RUNNER_NETWORK"), os.Getenv("AIDER_RUNNER_DATA_DIR"), logger)
 		if err != nil {
-			logger.Warn("failed to create aider session runner — agent service route disabled", zap.Error(err))
+			logger.Warn("failed to create aider session runner — aider provider disabled", zap.Error(err))
 		} else {
-			prOpener := github.NewClient()
-			agentSvc := agentsvc.NewAgentService(runner, agentRunRepo, prOpener, logger)
-			agentPath, agentHandler := servicesconnect.NewAgentServiceHandler(agentgrpc.NewAgentHandler(agentSvc))
-			logger.Info("registering agent service route", zap.String("path", agentPath))
-			srv.Handle(agentPath, agentHandler)
+			aiderRunner = r
 		}
 	} else {
-		logger.Warn("LITELLM_BASE_URL not set — agent service route disabled")
+		logger.Warn("LITELLM_BASE_URL not set — aider agent provider disabled")
+	}
+
+	if mcpURL := os.Getenv("REMORA_MCP_URL"); mcpURL != "" {
+		agentModel := os.Getenv("OLLAMA_AGENT_CHAT_MODEL")
+		if agentModel == "" {
+			agentModel = "qwen3:8b"
+		}
+		ollamaHost := os.Getenv("OLLAMA_HOST")
+		toolProvider := mcpclient.New(mcpURL, logger)
+		ollamaRunner = ollamarunner.NewSessionRunner(toolProvider, ollamatools.New(ollamaHost), agentModel, logger)
+		logger.Info("ollama agent provider enabled", zap.String("mcp_url", mcpURL), zap.String("model", agentModel))
+	} else {
+		logger.Warn("REMORA_MCP_URL not set — ollama agent provider disabled")
+	}
+
+	if aiderRunner != nil || ollamaRunner != nil {
+		agentRunRepo := &repo.AgentRunRepo{Conn: store}
+		prOpener := github.NewClient()
+		agentSvc := agentsvc.NewAgentService(aiderRunner, ollamaRunner, agentRunRepo, prOpener, logger)
+		agentPath, agentHandler := servicesconnect.NewAgentServiceHandler(agentgrpc.NewAgentHandler(agentSvc))
+		logger.Info("registering agent service route", zap.String("path", agentPath))
+		srv.Handle(agentPath, agentHandler)
+	} else {
+		logger.Warn("no agent provider configured — agent service route disabled")
 	}
 
 	srv.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

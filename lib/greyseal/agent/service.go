@@ -29,18 +29,20 @@ var terminalOutcomeResults = map[string]bool{
 }
 
 type agentService struct {
-	runner   SessionRunner
-	repo     AgentRunRepository
-	prOpener PullRequestOpener
-	logger   *zap.Logger
+	runner       SessionRunner // "aider" provider (code-editing runs)
+	ollamaRunner SessionRunner // "ollama:<model>" provider (in-process tool-calling); nil when unconfigured
+	repo         AgentRunRepository
+	prOpener     PullRequestOpener
+	logger       *zap.Logger
 
 	pollInterval time.Duration
 	watchTimeout time.Duration
 }
 
-func NewAgentService(runner SessionRunner, repo AgentRunRepository, prOpener PullRequestOpener, logger *zap.Logger) AgentService {
+func NewAgentService(runner, ollamaRunner SessionRunner, repo AgentRunRepository, prOpener PullRequestOpener, logger *zap.Logger) AgentService {
 	return &agentService{
 		runner:       runner,
+		ollamaRunner: ollamaRunner,
 		repo:         repo,
 		prOpener:     prOpener,
 		logger:       logger,
@@ -49,11 +51,28 @@ func NewAgentService(runner SessionRunner, repo AgentRunRepository, prOpener Pul
 	}
 }
 
+// runnerFor selects the SessionRunner for a provider string.
+func (srv *agentService) runnerFor(provider string) SessionRunner {
+	if strings.HasPrefix(provider, "ollama:") {
+		return srv.ollamaRunner
+	}
+	return srv.runner
+}
+
 func (srv *agentService) RunAgentTask(ctx context.Context, req RunAgentTaskRequest) (*greysealv1.AgentRun, error) {
-	if req.Provider != "aider" {
+	switch {
+	case req.Provider == "aider":
+		return srv.runAiderTask(ctx, req)
+	case strings.HasPrefix(req.Provider, "ollama:"):
+		return srv.runOllamaTask(ctx, req)
+	default:
 		return nil, fmt.Errorf("provider %q is not yet implemented", req.Provider)
 	}
+}
 
+// runAiderTask starts a code-editing run: an Aider container on a branch,
+// followed by a PR once the outcome is satisfied.
+func (srv *agentService) runAiderTask(ctx context.Context, req RunAgentTaskRequest) (*greysealv1.AgentRun, error) {
 	runUUID := uuid.New().String()
 	branchName := "agent/" + runUUID
 
@@ -93,11 +112,56 @@ func (srv *agentService) RunAgentTask(ctx context.Context, req RunAgentTaskReque
 	go srv.watchForCompletion(context.Background(), watchParams{
 		runUUID:     runUUID,
 		sessionID:   sessionID,
+		runner:      srv.runner,
 		githubToken: req.GithubToken,
 		repoURL:     req.RepoURL,
 		branch:      branchName,
 		title:       prTitle(req.TaskDescription),
 		body:        req.TaskDescription,
+	})
+
+	return run, nil
+}
+
+// runOllamaTask starts an in-process "ollama:<model>" run: a tool-calling
+// loop against a local model, no repo and no PR. Used for orchestration
+// tasks such as decomposing a design into draft tickets.
+func (srv *agentService) runOllamaTask(ctx context.Context, req RunAgentTaskRequest) (*greysealv1.AgentRun, error) {
+	if srv.ollamaRunner == nil {
+		return nil, fmt.Errorf("provider %q requested but the ollama agent runner is not configured", req.Provider)
+	}
+
+	runUUID := uuid.New().String()
+	srv.logger.Info("starting agent run", zap.String("provider", req.Provider), zap.String("uuid", runUUID))
+
+	sessionID, err := srv.ollamaRunner.StartSession(ctx, req)
+	if err != nil {
+		srv.logger.Error("failed to start agent session", zap.Error(err))
+		return nil, fmt.Errorf("failed to start agent session: %w", err)
+	}
+
+	now := timestamppb.New(time.Now())
+	run := &greysealv1.AgentRun{
+		Uuid:      runUUID,
+		Provider:  req.Provider,
+		RepoUrl:   "", // no repo — orchestration run
+		Status:    "running",
+		SessionId: sessionID,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := srv.repo.Create(ctx, run); err != nil {
+		srv.logger.Error("failed to persist agent run", zap.Error(err))
+		return nil, fmt.Errorf("failed to persist agent run: %w", err)
+	}
+
+	srv.logger.Info("agent run started", zap.String("uuid", run.Uuid), zap.String("session_id", sessionID))
+
+	go srv.watchForCompletion(context.Background(), watchParams{
+		runUUID:   runUUID,
+		sessionID: sessionID,
+		runner:    srv.ollamaRunner,
+		// no repoURL/branch/token — applyStatus skips PR opening for these
 	})
 
 	return run, nil
@@ -139,6 +203,7 @@ func prTitle(taskDescription string) string {
 type watchParams struct {
 	runUUID     string
 	sessionID   string
+	runner      SessionRunner
 	githubToken string
 	repoURL     string
 	branch      string
@@ -156,11 +221,16 @@ func (srv *agentService) watchForCompletion(ctx context.Context, p watchParams) 
 	ctx, cancel := context.WithTimeout(ctx, srv.watchTimeout)
 	defer cancel()
 
+	runner := p.runner
+	if runner == nil {
+		runner = srv.runner
+	}
+
 	ticker := time.NewTicker(srv.pollInterval)
 	defer ticker.Stop()
 
 	for {
-		status, outcomeResult, err := srv.runner.GetSessionStatus(ctx, p.sessionID)
+		status, outcomeResult, err := runner.GetSessionStatus(ctx, p.sessionID)
 		if err != nil {
 			srv.logger.Warn("agent run watcher: failed to get session status",
 				zap.String("uuid", p.runUUID), zap.Error(err))
@@ -193,11 +263,11 @@ func (srv *agentService) applyStatus(ctx context.Context, p watchParams, status,
 	run.Status = status
 	run.UpdatedAt = timestamppb.New(time.Now())
 
-	// file:// repo URLs are beaver's local-only mode (no GitHub remote to
-	// open a PR against — see the aider-local-mode plan) — the caller
-	// reads success/failure by attempting to clone the agent's branch
-	// directly, so pr_url intentionally stays empty for these runs.
-	if outcomeResult == "satisfied" && run.PrUrl == "" && !strings.HasPrefix(p.repoURL, "file://") {
+	// A PR is opened only for a real GitHub repo run. Skipped when:
+	//   - repoURL is empty — an "ollama:<model>" orchestration run has no repo;
+	//   - repoURL is file:// — beaver's local-only mode (no GitHub remote), where
+	//     the caller reads success by cloning the agent's branch directly.
+	if outcomeResult == "satisfied" && run.PrUrl == "" && p.repoURL != "" && !strings.HasPrefix(p.repoURL, "file://") {
 		prURL, err := srv.prOpener.OpenPullRequest(ctx, OpenPullRequestRequest{
 			RepoURL: p.repoURL,
 			Branch:  p.branch,
@@ -238,7 +308,11 @@ func (srv *agentService) GetAgentRun(ctx context.Context, runUUID string) (*grey
 		return run, nil
 	}
 
-	status, outcomeResult, err := srv.runner.GetSessionStatus(ctx, run.SessionId)
+	runner := srv.runnerFor(run.Provider)
+	if runner == nil {
+		return run, nil
+	}
+	status, outcomeResult, err := runner.GetSessionStatus(ctx, run.SessionId)
 	if err != nil {
 		srv.logger.Warn("failed to refresh agent run status from provider",
 			zap.String("uuid", runUUID), zap.String("session_id", run.SessionId), zap.Error(err),
@@ -275,5 +349,9 @@ func (srv *agentService) StreamAgentRun(ctx context.Context, runUUID string, str
 	if err != nil {
 		return fmt.Errorf("failed to load agent run: %w", err)
 	}
-	return srv.runner.StreamSession(ctx, run.SessionId, stream)
+	runner := srv.runnerFor(run.Provider)
+	if runner == nil {
+		return fmt.Errorf("no runner configured for provider %q", run.Provider)
+	}
+	return runner.StreamSession(ctx, run.SessionId, stream)
 }
