@@ -16,17 +16,19 @@ import (
 
 type AgentServiceTestSuite struct {
 	suite.Suite
-	runner   *mocks.MockSessionRunner
-	repo     *mocks.MockAgentRunRepository
-	prOpener *mocks.MockPullRequestOpener
-	svc      agent.AgentService
+	runner       *mocks.MockSessionRunner
+	ollamaRunner *mocks.MockSessionRunner
+	repo         *mocks.MockAgentRunRepository
+	prOpener     *mocks.MockPullRequestOpener
+	svc          agent.AgentService
 }
 
 func (s *AgentServiceTestSuite) SetupTest() {
 	s.runner = mocks.NewMockSessionRunner(s.T())
+	s.ollamaRunner = mocks.NewMockSessionRunner(s.T())
 	s.repo = mocks.NewMockAgentRunRepository(s.T())
 	s.prOpener = mocks.NewMockPullRequestOpener(s.T())
-	s.svc = agent.NewAgentService(s.runner, s.repo, s.prOpener, zap.NewNop())
+	s.svc = agent.NewAgentService(s.runner, s.ollamaRunner, s.repo, s.prOpener, zap.NewNop())
 }
 
 func TestRunAgentServiceTestSuite(t *testing.T) {
@@ -35,10 +37,36 @@ func TestRunAgentServiceTestSuite(t *testing.T) {
 
 func (s *AgentServiceTestSuite) TestRunAgentTask_RejectsUnimplementedProvider() {
 	_, err := s.svc.RunAgentTask(context.Background(), agent.RunAgentTaskRequest{
-		Provider: "ollama:qwen2.5",
+		Provider: "claude",
 	})
 	s.Require().Error(err)
 	s.Contains(err.Error(), "not yet implemented")
+}
+
+func (s *AgentServiceTestSuite) TestRunAgentTask_OllamaProvider() {
+	s.ollamaRunner.On("StartSession", mock.Anything, mock.MatchedBy(func(got agent.RunAgentTaskRequest) bool {
+		return got.Provider == "ollama:qwen3:8b" && got.TaskDescription == "decompose this design"
+	})).Return("sess-ollama-1", nil)
+	s.repo.On("Create", mock.Anything, mock.MatchedBy(func(run *greysealv1.AgentRun) bool {
+		return run.GetProvider() == "ollama:qwen3:8b" &&
+			run.GetRepoUrl() == "" &&
+			run.GetStatus() == "running" &&
+			run.GetSessionId() == "sess-ollama-1"
+	})).Return(nil)
+	// watchForCompletion runs detached and races the assertions.
+	s.ollamaRunner.On("GetSessionStatus", mock.Anything, "sess-ollama-1").
+		Return("terminated", "satisfied", nil).Maybe()
+	s.repo.On("Get", mock.Anything, mock.Anything).Return(&greysealv1.AgentRun{Uuid: "x"}, nil).Maybe()
+	s.repo.On("Update", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
+	run, err := s.svc.RunAgentTask(context.Background(), agent.RunAgentTaskRequest{
+		Provider:        "ollama:qwen3:8b",
+		TaskDescription: "decompose this design",
+	})
+	s.Require().NoError(err)
+	s.Equal("ollama:qwen3:8b", run.GetProvider())
+	s.Equal("running", run.GetStatus())
+	s.Empty(run.GetRepoUrl())
 }
 
 func (s *AgentServiceTestSuite) TestRunAgentTask_Success() {

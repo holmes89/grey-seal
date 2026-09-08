@@ -9,10 +9,13 @@ import "google/protobuf/timestamp.proto";
 message AgentRun {
   string uuid = 1;
 
-  // provider: "claude" (Managed Agents) — the only implemented value in
-  // Phase 1. "ollama:<model>" is a reserved, not-yet-implemented value.
+  // provider: "aider" (code-editing runs in disposable containers) or
+  // "ollama:<model>" (in-process tool-calling runs, e.g. design → draft
+  // tickets, with tools supplied over MCP).
   string provider = 2;
 
+  // repo_url is set for "aider" runs; empty for "ollama:<model>" runs, which
+  // have no repository.
   string repo_url = 3;
 
   // status: "running" | "idle" | "terminated" | "error".

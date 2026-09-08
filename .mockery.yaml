@@ -13,6 +13,8 @@ packages:
       AgentRunRepository:
       SessionRunner:
       PullRequestOpener:
+      ToolProvider:
+      ToolSession:
   github.com/holmes89/grey-seal/lib/greyseal/conversation:
     config:
       dir: "lib/greyseal/conversation/mocks"
