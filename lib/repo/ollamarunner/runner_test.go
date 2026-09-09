@@ -2,6 +2,8 @@ package ollamarunner_test
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -65,24 +67,30 @@ func (s *ollamaScript) reqs() []string {
 	return append([]string(nil), s.requests...)
 }
 
-const (
-	respCreateTicket  = `{"message":{"role":"assistant","tool_calls":[{"function":{"name":"create_ticket","arguments":{"project_uuid":"p1","title":"Add X","draft":true}}}]},"done":true}`
-	respDone          = `{"message":{"role":"assistant","content":"created 1 draft ticket"},"done":true}`
-	respProse         = `{"message":{"role":"assistant","content":"Here is how I would break this down: ..."},"done":true}`
-	respThinkThenDone = `{"message":{"role":"assistant","content":"<think>the user wants tickets</think>all done"},"done":true}`
-	// qwen2.5-coder:7b prints the tool call into the body and leaves
-	// tool_calls empty, often with a stray prose line between objects.
-	respInlineCreate = `{"message":{"role":"assistant","content":"{\"name\": \"create_ticket\", \"arguments\": {\"project_uuid\": \"p1\", \"title\": \"Add X\", \"draft\": true}}\n\n# assuming that worked"},"done":true}`
-)
+// planBody builds an Ollama /api/chat response whose assistant content is the
+// structured plan JSON the runner unmarshals. tickets are raw JSON objects.
+func planBody(projectUUID string, tickets ...string) string {
+	planJSON := fmt.Sprintf(`{"project_uuid":%q,"tickets":[%s]}`, projectUUID, strings.Join(tickets, ","))
+	content, _ := json.Marshal(planJSON)
+	return fmt.Sprintf(`{"message":{"role":"assistant","content":%s},"done":true}`, content)
+}
+
+// rawBody wraps an arbitrary assistant content string (e.g. non-JSON, or with
+// a <think> block) in an Ollama /api/chat response.
+func rawBody(content string) string {
+	c, _ := json.Marshal(content)
+	return fmt.Sprintf(`{"message":{"role":"assistant","content":%s},"done":true}`, c)
+}
+
+func tkt(title string) string {
+	return fmt.Sprintf(
+		`{"title":%q,"body":"work: %s","type":"TICKET_TYPE_TASK","priority":"PRIORITY_MEDIUM"}`,
+		title, title)
+}
 
 func toolMocks(t *testing.T) (*mocks.MockToolProvider, *mocks.MockToolSession) {
 	sess := mocks.NewMockToolSession(t)
-	sess.On("ListTools", mock.Anything).Return([]agentsvc.ToolDef{
-		{Name: "list_projects", Description: "list", InputSchema: map[string]any{"type": "object"}},
-		{Name: "list_tickets", Description: "list", InputSchema: map[string]any{"type": "object"}},
-		{Name: "create_ticket", Description: "create", InputSchema: map[string]any{"type": "object"}},
-	}, nil)
-	// the runner resolves the project list itself before the loop
+	// the runner resolves the project list itself before planning
 	sess.On("CallTool", mock.Anything, "list_projects", mock.Anything).
 		Return(`{"projects":[{"uuid":"p1","name":"ahh"}]}`, nil).Maybe()
 	sess.On("Close").Return(nil)
@@ -91,57 +99,172 @@ func toolMocks(t *testing.T) (*mocks.MockToolProvider, *mocks.MockToolSession) {
 	return prov, sess
 }
 
-func run(t *testing.T, script *ollamaScript, prov agentsvc.ToolProvider) (string, string) {
+// exec runs one session to termination and returns its outcome plus every
+// agent.message it emitted.
+func exec(t *testing.T, script *ollamaScript, prov agentsvc.ToolProvider) (status, outcome string, msgs []string) {
 	t.Helper()
 	r := ollamarunner.NewSessionRunner(prov, ollamatools.New(script.srv.URL), "qwen3:8b", zap.NewNop())
 	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
 		Provider: "ollama:qwen3:8b", TaskDescription: "Design: add feature X",
 	})
 	require.NoError(t, err)
-	return waitTerminal(t, r, id)
-}
-
-func (s *RunnerSuite) TestRun_CreatesDraftThenFinishes() {
-	script := newOllamaScript(respCreateTicket, respDone)
-	defer script.srv.Close()
-	prov, sess := toolMocks(s.T())
-	var createArgs map[string]any
-	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
-		Run(func(a mock.Arguments) { createArgs = a.Get(2).(map[string]any) }).
-		Return(`{"data":{"uuid":"t1","status":"draft"}}`, nil)
-
-	status, outcome := run(s.T(), script, prov)
-	require.Equal(s.T(), "terminated", status)
-	require.Equal(s.T(), "satisfied", outcome)
-	require.Equal(s.T(), true, createArgs["draft"])
-	require.Equal(s.T(), "p1", createArgs["project_uuid"])
-}
-
-func (s *RunnerSuite) TestRun_EmitsProgressHeartbeats() {
-	script := newOllamaScript(respCreateTicket, respDone)
-	defer script.srv.Close()
-	prov, sess := toolMocks(s.T())
-	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
-		Return(`{"data":{"uuid":"t1"}}`, nil)
-
-	r := ollamarunner.NewSessionRunner(prov, ollamatools.New(script.srv.URL), "qwen3:8b", zap.NewNop())
-	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
-		Provider: "ollama:qwen3:8b", TaskDescription: "d",
-	})
-	require.NoError(s.T(), err)
-	waitTerminal(s.T(), r, id)
-
-	var msgs []string
+	status, outcome = waitTerminal(t, r, id)
 	_ = r.StreamSession(context.Background(), id, func(e agentsvc.AgentRunEvent) error {
 		if e.Type == "agent.message" {
 			msgs = append(msgs, e.Message)
 		}
 		return nil
 	})
+	return
+}
+
+func run(t *testing.T, script *ollamaScript, prov agentsvc.ToolProvider) (string, string) {
+	t.Helper()
+	status, outcome, _ := exec(t, script, prov)
+	return status, outcome
+}
+
+func (s *RunnerSuite) TestRun_PlansThenCreatesAllTickets() {
+	script := newOllamaScript(planBody("p1", tkt("A"), tkt("B"), tkt("C")))
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	var calls []map[string]any
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Run(func(a mock.Arguments) { calls = append(calls, a.Get(2).(map[string]any)) }).
+		Return(`{"data":{"uuid":"11111111-1111-1111-1111-111111111111"}}`, nil)
+
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "satisfied", outcome)
+	require.Len(s.T(), calls, 3)
+	for _, c := range calls {
+		require.Equal(s.T(), true, c["draft"])
+		require.Equal(s.T(), "p1", c["project_uuid"])
+		require.NotEmpty(s.T(), c["title"])
+	}
+	// exactly one model call — no tool loop
+	require.Len(s.T(), script.reqs(), 1)
+}
+
+func (s *RunnerSuite) TestRun_StripsThinkFromPlan() {
+	body := rawBody(`<think>which project?</think>{"project_uuid":"p1","tickets":[` + tkt("A") + `]}`)
+	script := newOllamaScript(body)
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"data":{"uuid":"11111111-1111-1111-1111-111111111111"}}`, nil)
+
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "satisfied", outcome)
+}
+
+func (s *RunnerSuite) TestRun_NormalizesTypeAndPriority() {
+	body := rawBody(`{"project_uuid":"p1","tickets":[{"title":"A","body":"b","type":"bug","priority":"high"}]}`)
+	script := newOllamaScript(body)
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	var got map[string]any
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Run(func(a mock.Arguments) { got = a.Get(2).(map[string]any) }).
+		Return(`{"data":{"uuid":"11111111-1111-1111-1111-111111111111"}}`, nil)
+
+	_, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "satisfied", outcome)
+	require.Equal(s.T(), "TICKET_TYPE_BUG", got["type"])
+	require.Equal(s.T(), "PRIORITY_HIGH", got["priority"])
+}
+
+func (s *RunnerSuite) TestRun_RetriesOnUnusablePlan() {
+	script := newOllamaScript("__ERROR__", planBody("p1", tkt("A")))
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"data":{"uuid":"11111111-1111-1111-1111-111111111111"}}`, nil)
+
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "satisfied", outcome)
+	require.GreaterOrEqual(s.T(), len(script.reqs()), 2)
+	require.Contains(s.T(), script.reqs()[1], "That was unusable")
+}
+
+func (s *RunnerSuite) TestRun_FailsWhenProjectUnmatched() {
+	script := newOllamaScript(planBody("not-a-project", tkt("A")))
+	defer script.srv.Close()
+	prov, _ := toolMocks(s.T())
+	// no create_ticket expectation — it must never be called
+
+	status, outcome, msgs := exec(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "failed", outcome)
+	require.Contains(s.T(), strings.Join(msgs, "\n"), "no listed project matched")
+}
+
+func (s *RunnerSuite) TestRun_MatchesProjectByName() {
+	script := newOllamaScript(planBody("ahh", tkt("A")))
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	var got map[string]any
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Run(func(a mock.Arguments) { got = a.Get(2).(map[string]any) }).
+		Return(`{"data":{"uuid":"11111111-1111-1111-1111-111111111111"}}`, nil)
+
+	_, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "satisfied", outcome)
+	require.Equal(s.T(), "p1", got["project_uuid"]) // name "ahh" resolved to its uuid
+}
+
+func (s *RunnerSuite) TestRun_FailsWhenPlanEmpty() {
+	script := newOllamaScript(planBody("p1")) // valid project, zero tickets
+	defer script.srv.Close()
+	prov, _ := toolMocks(s.T())
+
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "failed", outcome)
+}
+
+func (s *RunnerSuite) TestRun_CountsOnlyRealCreates() {
+	script := newOllamaScript(planBody("p1", tkt("A"), tkt("B")))
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	// first create succeeds, second comes back as a Connect error envelope
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"data":{"uuid":"11111111-1111-1111-1111-111111111111"}}`, nil).Once()
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"code":"not_found","message":"project not found"}`, nil).Once()
+
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "satisfied", outcome) // 1 real create is still a partial success
+}
+
+func (s *RunnerSuite) TestRun_FailsWhenAllCreatesRejected() {
+	script := newOllamaScript(planBody("p1", tkt("A")))
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"code":"invalid_argument","message":"nope"}`, nil)
+
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "failed", outcome)
+}
+
+func (s *RunnerSuite) TestRun_EmitsProgressHeartbeats() {
+	script := newOllamaScript(planBody("p1", tkt("A")))
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"data":{"uuid":"11111111-1111-1111-1111-111111111111"}}`, nil)
+
+	_, _, msgs := exec(s.T(), script, prov)
 	joined := strings.Join(msgs, "\n")
 	require.Contains(s.T(), joined, "connecting to the ticket tools")
 	require.Contains(s.T(), joined, "resolving the project list")
-	require.Contains(s.T(), joined, "turn 1/")
+	require.Contains(s.T(), joined, "asking qwen")
+	require.Contains(s.T(), joined, "planning 1 ticket")
 }
 
 func (s *RunnerSuite) TestRun_TurnTimeout() {
@@ -173,128 +296,19 @@ func (s *RunnerSuite) TestRun_TurnTimeout() {
 	require.Contains(s.T(), strings.Join(msgs, "\n"), "timed out")
 }
 
-func (s *RunnerSuite) TestRun_RecoversInlineToolCalls() {
-	script := newOllamaScript(respInlineCreate, respDone)
+func (s *RunnerSuite) TestRun_FailsWhenNoProjectList() {
+	script := newOllamaScript(planBody("p1", tkt("A")))
 	defer script.srv.Close()
-	prov, sess := toolMocks(s.T())
-	var createArgs map[string]any
-	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
-		Run(func(a mock.Arguments) { createArgs = a.Get(2).(map[string]any) }).
-		Return(`{"data":{"uuid":"t1","status":"draft"}}`, nil)
-
-	r := ollamarunner.NewSessionRunner(prov, ollamatools.New(script.srv.URL), "qwen2.5-coder:7b", zap.NewNop())
-	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
-		Provider: "ollama:qwen2.5-coder:7b", TaskDescription: "Design: add feature X",
-	})
-	require.NoError(s.T(), err)
-	status, outcome := waitTerminal(s.T(), r, id)
-
-	require.Equal(s.T(), "terminated", status)
-	require.Equal(s.T(), "satisfied", outcome)
-	require.Equal(s.T(), "p1", createArgs["project_uuid"])
-	require.Equal(s.T(), true, createArgs["draft"])
-
-	var msgs []string
-	_ = r.StreamSession(context.Background(), id, func(e agentsvc.AgentRunEvent) error {
-		msgs = append(msgs, e.Message)
-		return nil
-	})
-	joined := strings.Join(msgs, "\n")
-	require.Contains(s.T(), joined, "wrote 1 tool call(s) as text")
-	// the stray prose line must not leak into the transcript as a message
-	require.NotContains(s.T(), joined, "assuming that worked")
-}
-
-func (s *RunnerSuite) TestRun_IgnoresInlineJSONForUnknownTool() {
-	// a JSON object that looks like a tool call but names a tool the runner
-	// does not offer must be treated as prose, not executed.
-	body := `{"message":{"role":"assistant","content":"{\"name\": \"rm_rf\", \"arguments\": {}}"},"done":true}`
-	script := newOllamaScript(body) // repeats forever
-	defer script.srv.Close()
-	prov, _ := toolMocks(s.T())
-
-	status, outcome := run(s.T(), script, prov)
-	require.Equal(s.T(), "terminated", status)
-	require.Equal(s.T(), "failed", outcome) // nudged once, then no tickets
-}
-
-func (s *RunnerSuite) TestRun_NudgesPastAPreTextTurn() {
-	script := newOllamaScript(respProse, respCreateTicket, respDone)
-	defer script.srv.Close()
-	prov, sess := toolMocks(s.T())
-	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
-		Return(`{"data":{"uuid":"t1"}}`, nil)
-
-	status, outcome := run(s.T(), script, prov)
-	require.Equal(s.T(), "terminated", status)
-	require.Equal(s.T(), "satisfied", outcome)
-	// the 2nd request must carry the nudge as a user message
-	require.GreaterOrEqual(s.T(), len(script.reqs()), 2)
-	require.Contains(s.T(), script.reqs()[1], "You did not call a tool")
-}
-
-func (s *RunnerSuite) TestRun_InjectsProjectListAndCountsOnlyRealCreates() {
-	// turn 1 -> create_ticket that the backend rejects (error envelope as text);
-	// turn 2 -> "done".
-	script := newOllamaScript(respCreateTicket, respDone)
-	defer script.srv.Close()
-	prov, sess := toolMocks(s.T())
-	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
-		Return(`{"code":"not_found","message":"project not found"}`, nil)
-
-	status, outcome := run(s.T(), script, prov)
-	require.Equal(s.T(), "terminated", status)
-	require.Equal(s.T(), "failed", outcome) // the create did not actually succeed
-	// the resolved project list was injected into the first prompt
-	require.GreaterOrEqual(s.T(), len(script.reqs()), 1)
-	require.Contains(s.T(), script.reqs()[0], "p1")
-	require.Contains(s.T(), script.reqs()[0], "ahh")
-}
-
-func (s *RunnerSuite) TestRun_PartialSuccessOnModelError() {
-	script := newOllamaScript(respCreateTicket, "__ERROR__")
-	defer script.srv.Close()
-	prov, sess := toolMocks(s.T())
-	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
-		Return(`{"data":{"uuid":"t1"}}`, nil)
-
-	status, outcome := run(s.T(), script, prov)
-	require.Equal(s.T(), "terminated", status)
-	require.Equal(s.T(), "satisfied", outcome) // 1 ticket already created
-}
-
-func (s *RunnerSuite) TestRun_FailsWhenNoTicketsCreated() {
-	script := newOllamaScript(respProse) // prose forever
-	defer script.srv.Close()
-	prov, _ := toolMocks(s.T())
+	sess := mocks.NewMockToolSession(s.T())
+	sess.On("CallTool", mock.Anything, "list_projects", mock.Anything).
+		Return(``, assertErr{})
+	sess.On("Close").Return(nil)
+	prov := mocks.NewMockToolProvider(s.T())
+	prov.On("Session", mock.Anything).Return(sess, nil)
 
 	status, outcome := run(s.T(), script, prov)
 	require.Equal(s.T(), "terminated", status)
 	require.Equal(s.T(), "failed", outcome)
-}
-
-func (s *RunnerSuite) TestRun_StripsThinkBlocks() {
-	script := newOllamaScript(respCreateTicket, respThinkThenDone)
-	defer script.srv.Close()
-	prov, sess := toolMocks(s.T())
-	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
-		Return(`{"data":{"uuid":"t1"}}`, nil)
-
-	r := ollamarunner.NewSessionRunner(prov, ollamatools.New(script.srv.URL), "qwen3:8b", zap.NewNop())
-	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
-		Provider: "ollama:qwen3:8b", TaskDescription: "d",
-	})
-	require.NoError(s.T(), err)
-	waitTerminal(s.T(), r, id)
-
-	var msgs []string
-	_ = r.StreamSession(context.Background(), id, func(e agentsvc.AgentRunEvent) error {
-		msgs = append(msgs, e.Message)
-		return nil
-	})
-	for _, m := range msgs {
-		require.NotContains(s.T(), m, "<think>")
-	}
 }
 
 func (s *RunnerSuite) TestRun_ToolSessionFailure() {

@@ -1,8 +1,14 @@
-// Package ollamarunner implements agent.SessionRunner as an in-process
-// tool-calling loop against a local Ollama model, with tools supplied over
-// MCP (agent.ToolProvider). It is the "ollama:<model>" agent provider: no
-// Docker, no repo, no PR — it drives an orchestration task such as
-// decomposing a design into draft tickets.
+// Package ollamarunner implements agent.SessionRunner as a single
+// structured-output planning call against a local Ollama model, with the
+// ticket tools supplied over MCP (agent.ToolProvider). It is the
+// "ollama:<model>" agent provider: no Docker, no repo, no PR — it decomposes
+// a software design into DRAFT rabbit tickets.
+//
+// The model is asked once, constrained by an Ollama `format` JSON schema, for
+// the whole plan ({project_uuid, tickets[]}); the runner then calls the
+// create_ticket MCP tool for each item itself. Small local models are weak at
+// multi-turn tool-calling but reliable at schema-constrained JSON, so this
+// removes that failure class. One corrective retry covers a bad plan.
 package ollamarunner
 
 import (
@@ -11,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -25,53 +32,54 @@ import (
 var _ agentsvc.SessionRunner = (*SessionRunner)(nil)
 
 const (
-	// A normal decomposition run is 2-4 model turns; 8 is ample headroom.
-	defaultMaxIterations = 8
-	// Per model turn. A CPU-bound local model can take minutes for the first
-	// turn; a turn that blows past this is treated as wedged and the run
-	// stops rather than hanging until defaultRunTimeout.
-	defaultTurnTimeout = 8 * time.Minute
-	// Whole-run ceiling (maxIter * turnTimeout worst case is well under this).
-	defaultRunTimeout   = 40 * time.Minute
+	// Per model call. The planning call is CPU-bound on a local host and can
+	// take a few minutes; one that blows past this is treated as wedged and
+	// the run stops rather than hanging until defaultRunTimeout.
+	defaultTurnTimeout = 10 * time.Minute
+	// Whole-run ceiling (planning call + one retry + the create_ticket calls).
+	defaultRunTimeout   = 25 * time.Minute
 	resolveToolsTimeout = 30 * time.Second
 	streamPollInterval  = 300 * time.Millisecond
+	// The planning call plus at most one corrective retry.
+	maxPlanAttempts = 2
 )
 
-// systemPrompt steers the model through the design→draft-tickets task. It is
-// deliberately imperative: a descriptive version made qwen3:8b answer with
-// prose and never emit tool_calls.
-const systemPrompt = `You turn a software design into a set of DRAFT tickets in a planning system called Rabbit, using ONLY the tools provided.
+// planPrompt steers the model to emit the whole plan as JSON in one shot. It
+// is deliberately imperative: descriptive phrasing makes small local models
+// answer with prose instead of structured output.
+const planPrompt = `You decompose a software design into DRAFT tickets in a planning system called Rabbit.
 
-The projects you may use are listed below, each as "name  <uuid>". Choose the ONE whose name best matches the design and use its uuid verbatim for every project_uuid argument. NEVER pass a project name, a guessed uuid, or all-zeros where a uuid is required. If no listed project fits, reply with exactly NO_PROJECT and call no tools.
+Output ONLY JSON matching the schema — no prose, no code fences.
 
-Your FIRST action MUST be a tool call — never write prose first.
+project_uuid MUST be copied verbatim from the Projects list below: choose the row whose name best matches the design. If no listed project fits, set project_uuid to "" and return an empty tickets list.
 
-Steps:
-- Break the design into small, independent units of work.
-- For each unit call create_ticket with: project_uuid (a uuid from the list below); a short imperative title; a markdown body saying what to do and why; type (one of TICKET_TYPE_FEATURE, TICKET_TYPE_BUG, TICKET_TYPE_TASK); priority (one of PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH); and draft set to true — always.
-- If a create_ticket call returns an error, fix the arguments and try again; do not repeat the same failing call.
-- When every unit has a ticket, reply with ONE short summary line listing the titles you created, and call no more tools. Only then may you write prose.`
+Break the design into small, independently shippable units of work — one ticket each:
+- title: a short imperative summary.
+- body: markdown saying what to do and why.
+- type: TICKET_TYPE_TASK, unless the unit is net-new user-facing capability (TICKET_TYPE_FEATURE) or fixing a defect (TICKET_TYPE_BUG).
+- priority: PRIORITY_MEDIUM, unless the unit is foundational or blocks other work (PRIORITY_HIGH) or is a nice-to-have (PRIORITY_LOW).`
 
-// promptWithoutProjectList is the fallback when the runner could not fetch
-// the project list itself (the model must then call list_projects).
-const promptWithoutProjectList = `You turn a software design into a set of DRAFT tickets in Rabbit, using ONLY the tools provided.
-
-Your FIRST action MUST be to call list_projects with NO arguments. Never write prose before or instead of a tool call. list_projects returns projects as {uuid, name}: match the design to one by NAME, then use that project's uuid verbatim for every project_uuid argument — never a name or a guessed uuid. If none matches, reply with exactly NO_PROJECT.
-
-Then, for each small independent unit of work, call create_ticket with: project_uuid (the uuid from list_projects); a short imperative title; a markdown body; type (TICKET_TYPE_FEATURE|BUG|TASK); priority (PRIORITY_LOW|MEDIUM|HIGH); draft: true. When done, reply with one summary line and call no more tools.`
-
-// nudge is appended once if a turn produces no tool call and nothing has been
-// created yet, so a single stray prose turn cannot end the run.
-const nudge = `You did not call a tool. Call list_projects now — or, if no project matches the design, reply with exactly NO_PROJECT.`
-
-// allowedTools is the subset of the MCP server's tools this provider exposes
-// to the model.
-var allowedTools = map[string]bool{
-	"list_projects": true,
-	"list_tickets":  true,
-	"get_ticket":    true,
-	"create_ticket": true,
-}
+// planSchema is the Ollama `format` constraint for the planning call.
+var planSchema = json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "project_uuid": { "type": "string" },
+    "tickets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "body": { "type": "string" },
+          "type": { "type": "string", "enum": ["TICKET_TYPE_FEATURE", "TICKET_TYPE_BUG", "TICKET_TYPE_TASK"] },
+          "priority": { "type": "string", "enum": ["PRIORITY_LOW", "PRIORITY_MEDIUM", "PRIORITY_HIGH"] }
+        },
+        "required": ["title", "body", "type", "priority"]
+      }
+    }
+  },
+  "required": ["project_uuid", "tickets"]
+}`)
 
 // SessionRunner drives ollama:<model> agent runs.
 type SessionRunner struct {
@@ -79,10 +87,8 @@ type SessionRunner struct {
 	chat        *ollamatools.Client
 	model       string
 	logger      *zap.Logger
-	maxIter     int
 	runTimeout  time.Duration
 	turnTimeout time.Duration
-	allowed     map[string]bool
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -98,14 +104,9 @@ type session struct {
 // Option tweaks a SessionRunner (mainly for tests).
 type Option func(*SessionRunner)
 
-// WithTimeouts overrides the per-turn and whole-run timeouts.
+// WithTimeouts overrides the per-call and whole-run timeouts.
 func WithTimeouts(turn, run time.Duration) Option {
 	return func(r *SessionRunner) { r.turnTimeout, r.runTimeout = turn, run }
-}
-
-// WithMaxIterations overrides the model-turn cap.
-func WithMaxIterations(n int) Option {
-	return func(r *SessionRunner) { r.maxIter = n }
 }
 
 // NewSessionRunner builds a runner. model is the Ollama model name (the part
@@ -116,10 +117,8 @@ func NewSessionRunner(tools agentsvc.ToolProvider, chat *ollamatools.Client, mod
 		chat:        chat,
 		model:       model,
 		logger:      logger,
-		maxIter:     defaultMaxIterations,
 		runTimeout:  defaultRunTimeout,
 		turnTimeout: defaultTurnTimeout,
-		allowed:     allowedTools,
 		sessions:    make(map[string]*session),
 	}
 	for _, o := range opts {
@@ -128,8 +127,8 @@ func NewSessionRunner(tools agentsvc.ToolProvider, chat *ollamatools.Client, mod
 	return r
 }
 
-// StartSession kicks off the agent loop in a goroutine and returns a
-// synthetic session ID immediately.
+// StartSession kicks off the agent run in a goroutine and returns a synthetic
+// session ID immediately.
 func (r *SessionRunner) StartSession(_ context.Context, req agentsvc.RunAgentTaskRequest) (string, error) {
 	if strings.TrimSpace(req.TaskDescription) == "" {
 		return "", fmt.Errorf("ollamarunner: task_description is required")
@@ -193,6 +192,18 @@ func (r *SessionRunner) StreamSession(ctx context.Context, sessionID string, str
 	}
 }
 
+type planTicket struct {
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+	Type     string `json:"type"`
+	Priority string `json:"priority"`
+}
+
+type plan struct {
+	ProjectUUID string       `json:"project_uuid"`
+	Tickets     []planTicket `json:"tickets"`
+}
+
 func (r *SessionRunner) run(sessionID, design string) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.runTimeout)
 	defer cancel()
@@ -215,168 +226,124 @@ func (r *SessionRunner) run(sessionID, design string) {
 	}
 	defer ts.Close() //nolint:errcheck
 
-	defs, err := ts.ListTools(ctx)
-	if err != nil {
-		fail("could not list tools: %v", err)
-		return
-	}
-	// Resolve the project list ourselves rather than trusting the model to
-	// call list_projects with the right (no) arguments — small local models
-	// stuff the project name into product_uuid and get nothing back.
+	// Resolve the project list ourselves — the deterministic path needs a
+	// uuid up front and small local models pass project names where a uuid is
+	// required.
 	say("resolving the project list…")
-	projectList := r.resolveProjects(ctx, ts)
-	sysPrompt := systemPrompt
-	skip := map[string]bool{}
+	projectList, byUUID, byName := r.resolveProjects(ctx, ts)
 	if projectList == "" {
-		say("no project list from the server — the model will look it up")
-		sysPrompt = promptWithoutProjectList
-	} else {
-		say(fmt.Sprintf("using %d project(s)", strings.Count(projectList, "\n")))
-		skip["list_projects"] = true // the list is in the prompt; no need to call it
-	}
-
-	tools := make([]ollamatools.Tool, 0, len(defs))
-	offered := make(map[string]bool, len(defs))
-	for _, d := range defs {
-		if !r.allowed[d.Name] || skip[d.Name] {
-			continue
-		}
-		tools = append(tools, ollamatools.NewTool(d.Name, d.Description, d.InputSchema))
-		offered[d.Name] = true
-	}
-	if len(tools) == 0 {
-		fail("the MCP server exposes none of the expected ticket tools")
+		fail("could not load the project list — cannot draft tickets")
 		return
 	}
+	say(fmt.Sprintf("using %d project(s)", len(byUUID)))
 
-	userMsg := design
-	if projectList != "" {
-		userMsg = design + "\n\nProjects (use a uuid, never a name):\n" + projectList
-	}
 	messages := []ollamatools.Message{
-		{Role: "system", Content: sysPrompt},
-		{Role: "user", Content: userMsg},
+		{Role: "system", Content: planPrompt},
+		{Role: "user", Content: design + "\n\nProjects (name  <uuid>):\n" + projectList},
 	}
 
-	created := 0
-	nudged := false
-
-	finishByCount := func() {
-		if created > 0 {
-			r.emit(sessionID, agentsvc.AgentRunEvent{
-				Type:    "agent.message",
-				Message: fmt.Sprintf("done — created %d draft ticket(s)", created),
-			})
-			r.finish(sessionID, "satisfied")
-			return
-		}
-		r.emit(sessionID, agentsvc.AgentRunEvent{
-			Type:    "agent.message",
-			Message: "no draft tickets were created",
-		})
-		r.finish(sessionID, "failed")
-	}
-
-	for i := 0; i < r.maxIter; i++ {
-		hb := fmt.Sprintf("asking %s to work on the design (turn %d/%d)…", r.model, i+1, r.maxIter)
-		if i == 0 {
-			hb += " — the first turn can take a few minutes on this host"
+	var p plan
+	var lastReason string
+	planned := false
+	for attempt := 1; attempt <= maxPlanAttempts && !planned; attempt++ {
+		hb := fmt.Sprintf("asking %s to work on the design…", r.model)
+		if attempt == 1 {
+			hb += " — this can take a few minutes on this host"
 		}
 		say(hb)
 
 		turnCtx, cancelTurn := context.WithTimeout(ctx, r.turnTimeout)
-		msg, err := r.chat.Chat(turnCtx, r.model, messages, tools)
+		msg, cerr := r.chat.ChatJSON(turnCtx, r.model, messages, planSchema)
 		cancelTurn()
-		if err != nil {
-			// A mid-run model error after tickets already exist is a partial
-			// success, not a hard failure — finishByCount decides.
-			reason := fmt.Sprintf("model call failed: %v", err)
-			if errors.Is(err, context.DeadlineExceeded) {
-				reason = fmt.Sprintf("model turn timed out after %s — stopping", r.turnTimeout)
-			}
-			say(reason)
-			if created == 0 {
-				r.logger.Warn("ollama agent run failed", zap.String("session_id", sessionID), zap.Error(err))
-			}
-			finishByCount()
+
+		if errors.Is(cerr, context.DeadlineExceeded) {
+			fail("model call timed out after %s — stopping", r.turnTimeout)
 			return
 		}
-		text := stripThink(msg.Content)
-		// Small local models (qwen2.5-coder:7b in particular) often print the
-		// tool-call JSON into the message body instead of populating tool_calls.
-		// Recover those so the run can proceed instead of stalling on a nudge.
-		if len(msg.ToolCalls) == 0 {
-			if inline := parseInlineToolCalls(text, offered); len(inline) > 0 {
-				msg.ToolCalls = inline
-				text = ""
-				r.emit(sessionID, agentsvc.AgentRunEvent{
-					Type:    "agent.message",
-					Message: fmt.Sprintf("model wrote %d tool call(s) as text — running them", len(inline)),
-				})
+		if cerr != nil {
+			lastReason = fmt.Sprintf("model call failed: %v", cerr)
+			r.logger.Warn("ollama agent: plan call failed", zap.String("session_id", sessionID), zap.Error(cerr))
+		} else {
+			var cand plan
+			switch {
+			case json.Unmarshal([]byte(stripThink(msg.Content)), &cand) != nil:
+				lastReason = "the model did not return valid JSON"
+			default:
+				resolved, matched := matchProject(cand.ProjectUUID, byUUID, byName)
+				switch {
+				case !matched:
+					lastReason = "no listed project matched the design"
+				case len(cand.Tickets) == 0:
+					lastReason = "the plan contained no tickets"
+				default:
+					cand.ProjectUUID = resolved
+					p = cand
+					planned = true
+				}
+			}
+			if !planned && attempt < maxPlanAttempts {
+				messages = append(messages, ollamatools.Message{Role: "assistant", Content: msg.Content})
 			}
 		}
-		msg.Content = text
-		messages = append(messages, msg)
 
-		if len(msg.ToolCalls) == 0 {
-			if strings.TrimSpace(text) != "" {
-				r.emit(sessionID, agentsvc.AgentRunEvent{Type: "agent.message", Message: text})
-			}
-			if strings.EqualFold(strings.TrimSpace(text), "NO_PROJECT") {
-				r.emit(sessionID, agentsvc.AgentRunEvent{
-					Type:    "agent.message",
-					Message: "no matching project — nothing created",
-				})
-				r.finish(sessionID, "failed")
-				return
-			}
-			// A single stray prose turn before anything is created gets one
-			// explicit nudge rather than silently ending the run.
-			if created == 0 && !nudged {
-				nudged = true
-				messages = append(messages, ollamatools.Message{Role: "user", Content: nudge})
-				r.emit(sessionID, agentsvc.AgentRunEvent{
-					Type:    "agent.message",
-					Message: "model did not call a tool — nudging it to start",
-				})
-				continue
-			}
-			finishByCount()
-			return
-		}
-
-		for _, tc := range msg.ToolCalls {
-			name := tc.Function.Name
-			argsJSON, _ := json.Marshal(tc.Function.Arguments)
-			r.emit(sessionID, agentsvc.AgentRunEvent{
-				Type:    "agent.tool_use",
-				Message: fmt.Sprintf("%s(%s)", name, truncate(string(argsJSON), 300)),
-			})
-
-			result, callErr := ts.CallTool(ctx, name, tc.Function.Arguments)
-			content := result
-			if callErr != nil {
-				content = "ERROR: " + callErr.Error()
-			} else if name == "create_ticket" && ticketCreated(result) {
-				created++
-			}
-			r.emit(sessionID, agentsvc.AgentRunEvent{
-				Type:    "agent.tool_use",
-				Message: fmt.Sprintf("%s → %s", name, truncate(content, 300)),
-			})
+		if !planned && attempt < maxPlanAttempts {
+			say(fmt.Sprintf("the plan was unusable (%s) — asking once more", lastReason))
 			messages = append(messages, ollamatools.Message{
-				Role:     "tool",
-				ToolName: name,
-				Content:  content,
+				Role: "user",
+				Content: fmt.Sprintf(
+					"That was unusable: %s. Return ONLY JSON matching the schema. project_uuid MUST be exactly one of: %s. Include at least one ticket.",
+					lastReason, strings.Join(sortedKeys(byUUID), ", ")),
 			})
 		}
 	}
 
-	r.emit(sessionID, agentsvc.AgentRunEvent{
-		Type:    "agent.message",
-		Message: fmt.Sprintf("reached the %d-iteration cap; created %d draft ticket(s) so far", r.maxIter, created),
-	})
-	finishByCount()
+	if !planned {
+		if strings.Contains(lastReason, "no listed project") {
+			say("no listed project matched the design — nothing created")
+		} else {
+			say(fmt.Sprintf("could not get a usable plan from the model (%s)", lastReason))
+		}
+		r.finish(sessionID, "failed")
+		return
+	}
+
+	say(fmt.Sprintf("planning %d ticket(s)…", len(p.Tickets)))
+	created := 0
+	for _, t := range p.Tickets {
+		args := map[string]any{
+			"project_uuid": p.ProjectUUID,
+			"title":        t.Title,
+			"body":         t.Body,
+			"type":         normType(t.Type),
+			"priority":     normPriority(t.Priority),
+			"draft":        true,
+		}
+		argsJSON, _ := json.Marshal(args)
+		r.emit(sessionID, agentsvc.AgentRunEvent{
+			Type:    "agent.tool_use",
+			Message: fmt.Sprintf("create_ticket(%s)", truncate(string(argsJSON), 300)),
+		})
+
+		result, callErr := ts.CallTool(ctx, "create_ticket", args)
+		content := result
+		if callErr != nil {
+			content = "ERROR: " + callErr.Error()
+		} else if ticketCreated(result) {
+			created++
+		}
+		r.emit(sessionID, agentsvc.AgentRunEvent{
+			Type:    "agent.tool_use",
+			Message: fmt.Sprintf("create_ticket → %s", truncate(content, 300)),
+		})
+	}
+
+	if created > 0 {
+		say(fmt.Sprintf("done — created %d draft ticket(s)", created))
+		r.finish(sessionID, "satisfied")
+		return
+	}
+	say("no draft tickets were created")
+	r.finish(sessionID, "failed")
 }
 
 func (r *SessionRunner) emit(sessionID string, e agentsvc.AgentRunEvent) {
@@ -411,14 +378,15 @@ func truncate(s string, n int) string {
 }
 
 // resolveProjects calls list_projects (no args) and returns a newline list of
-// "name  <uuid>" rows, or "" if the call failed or returned nothing.
-func (r *SessionRunner) resolveProjects(ctx context.Context, ts agentsvc.ToolSession) string {
+// "name  <uuid>" rows plus name→uuid and uuid→name lookup maps, or ("", nil,
+// nil) if the call failed or returned nothing.
+func (r *SessionRunner) resolveProjects(ctx context.Context, ts agentsvc.ToolSession) (list string, byUUID, byName map[string]string) {
 	rpCtx, cancel := context.WithTimeout(ctx, resolveToolsTimeout)
 	defer cancel()
 	raw, err := ts.CallTool(rpCtx, "list_projects", map[string]any{})
 	if err != nil {
-		r.logger.Warn("ollama agent: list_projects failed; falling back to model-driven lookup", zap.Error(err))
-		return ""
+		r.logger.Warn("ollama agent: list_projects failed", zap.Error(err))
+		return "", nil, nil
 	}
 	var resp struct {
 		Projects []struct {
@@ -427,16 +395,78 @@ func (r *SessionRunner) resolveProjects(ctx context.Context, ts agentsvc.ToolSes
 		} `json:"projects"`
 	}
 	if json.Unmarshal([]byte(raw), &resp) != nil || len(resp.Projects) == 0 {
-		return ""
+		return "", nil, nil
 	}
+	byUUID = map[string]string{}
+	byName = map[string]string{}
 	var b strings.Builder
-	for _, p := range resp.Projects {
-		if p.UUID == "" {
+	for _, pr := range resp.Projects {
+		if pr.UUID == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "- %s  %s\n", p.Name, p.UUID)
+		fmt.Fprintf(&b, "- %s  %s\n", pr.Name, pr.UUID)
+		byUUID[pr.UUID] = pr.Name
+		if n := strings.ToLower(strings.TrimSpace(pr.Name)); n != "" {
+			byName[n] = pr.UUID
+		}
 	}
-	return b.String()
+	if len(byUUID) == 0 {
+		return "", nil, nil
+	}
+	return b.String(), byUUID, byName
+}
+
+// matchProject resolves what the model put in project_uuid to a real uuid: an
+// exact uuid match, or a case-insensitive project-name match (small models
+// sometimes return the name). Returns ("", false) for an empty or unknown
+// value.
+func matchProject(v string, byUUID, byName map[string]string) (string, bool) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "", false
+	}
+	if _, ok := byUUID[v]; ok {
+		return v, true
+	}
+	if u, ok := byName[strings.ToLower(v)]; ok {
+		return u, true
+	}
+	return "", false
+}
+
+func sortedKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// normType maps a model-supplied ticket type to a valid enum, defaulting to
+// TICKET_TYPE_TASK.
+func normType(s string) string {
+	switch strings.ToUpper(strings.TrimSpace(s)) {
+	case "TICKET_TYPE_FEATURE", "FEATURE":
+		return "TICKET_TYPE_FEATURE"
+	case "TICKET_TYPE_BUG", "BUG":
+		return "TICKET_TYPE_BUG"
+	default:
+		return "TICKET_TYPE_TASK"
+	}
+}
+
+// normPriority maps a model-supplied priority to a valid enum, defaulting to
+// PRIORITY_MEDIUM.
+func normPriority(s string) string {
+	switch strings.ToUpper(strings.TrimSpace(s)) {
+	case "PRIORITY_LOW", "LOW":
+		return "PRIORITY_LOW"
+	case "PRIORITY_HIGH", "HIGH":
+		return "PRIORITY_HIGH"
+	default:
+		return "PRIORITY_MEDIUM"
+	}
 }
 
 // ticketCreated reports whether a create_ticket result is a real success (a
@@ -455,98 +485,11 @@ func ticketCreated(result string) bool {
 	return r.Code == "" && r.Data.UUID != ""
 }
 
-// parseInlineToolCalls extracts tool calls a model printed into its message
-// body rather than the tool_calls field. It accepts the shapes small local
-// models emit:
-//
-//	{"name": "create_ticket", "arguments": {…}}
-//	{"function": {"name": "create_ticket", "arguments": {…}}}
-//
-// with "parameters" accepted as an alias for "arguments". Only names in
-// offered are returned, so a JSON example inside a ticket body is ignored.
-func parseInlineToolCalls(content string, offered map[string]bool) []ollamatools.ToolCall {
-	var calls []ollamatools.ToolCall
-	for _, obj := range jsonObjects(content) {
-		var raw struct {
-			Name       string          `json:"name"`
-			Arguments  json.RawMessage `json:"arguments"`
-			Parameters json.RawMessage `json:"parameters"`
-			Function   *struct {
-				Name       string          `json:"name"`
-				Arguments  json.RawMessage `json:"arguments"`
-				Parameters json.RawMessage `json:"parameters"`
-			} `json:"function"`
-		}
-		if json.Unmarshal([]byte(obj), &raw) != nil {
-			continue
-		}
-		name, argsRaw := raw.Name, raw.Arguments
-		if len(argsRaw) == 0 {
-			argsRaw = raw.Parameters
-		}
-		if raw.Function != nil && raw.Function.Name != "" {
-			name = raw.Function.Name
-			argsRaw = raw.Function.Arguments
-			if len(argsRaw) == 0 {
-				argsRaw = raw.Function.Parameters
-			}
-		}
-		if name == "" || !offered[name] {
-			continue
-		}
-		args := map[string]any{}
-		if len(argsRaw) > 0 {
-			if json.Unmarshal(argsRaw, &args) != nil {
-				continue
-			}
-		}
-		var tc ollamatools.ToolCall
-		tc.Function.Name = name
-		tc.Function.Arguments = args
-		calls = append(calls, tc)
-	}
-	return calls
-}
-
-// jsonObjects returns the top-level {…} substrings of s, tracking string
-// literals so braces inside a string value don't skew the depth count.
-func jsonObjects(s string) []string {
-	var out []string
-	depth, start := 0, -1
-	inStr, esc := false, false
-	for i, r := range s {
-		switch {
-		case esc:
-			esc = false
-		case inStr && r == '\\':
-			esc = true
-		case r == '"':
-			inStr = !inStr
-		case inStr:
-			// inside a string literal — ignore structural characters
-		case r == '{':
-			if depth == 0 {
-				start = i
-			}
-			depth++
-		case r == '}':
-			if depth > 0 {
-				depth--
-				if depth == 0 && start >= 0 {
-					out = append(out, s[start:i+1])
-					start = -1
-				}
-			}
-		}
-	}
-	return out
-}
-
 var thinkBlock = regexp.MustCompile(`(?is)<think>.*?</think>`)
 
 // stripThink removes <think>…</think> reasoning blocks — qwen3 can emit them
-// even with think:false on some Ollama builds — so they stay out of the
-// transcript and the event stream.
+// even with think:false on some Ollama builds — so they stay out of the JSON
+// the runner has to parse.
 func stripThink(s string) string {
 	return strings.TrimSpace(thinkBlock.ReplaceAllString(s, ""))
 }
