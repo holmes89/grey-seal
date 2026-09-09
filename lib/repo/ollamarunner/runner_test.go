@@ -70,6 +70,9 @@ const (
 	respDone          = `{"message":{"role":"assistant","content":"created 1 draft ticket"},"done":true}`
 	respProse         = `{"message":{"role":"assistant","content":"Here is how I would break this down: ..."},"done":true}`
 	respThinkThenDone = `{"message":{"role":"assistant","content":"<think>the user wants tickets</think>all done"},"done":true}`
+	// qwen2.5-coder:7b prints the tool call into the body and leaves
+	// tool_calls empty, often with a stray prose line between objects.
+	respInlineCreate = `{"message":{"role":"assistant","content":"{\"name\": \"create_ticket\", \"arguments\": {\"project_uuid\": \"p1\", \"title\": \"Add X\", \"draft\": true}}\n\n# assuming that worked"},"done":true}`
 )
 
 func toolMocks(t *testing.T) (*mocks.MockToolProvider, *mocks.MockToolSession) {
@@ -168,6 +171,51 @@ func (s *RunnerSuite) TestRun_TurnTimeout() {
 		return nil
 	})
 	require.Contains(s.T(), strings.Join(msgs, "\n"), "timed out")
+}
+
+func (s *RunnerSuite) TestRun_RecoversInlineToolCalls() {
+	script := newOllamaScript(respInlineCreate, respDone)
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	var createArgs map[string]any
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Run(func(a mock.Arguments) { createArgs = a.Get(2).(map[string]any) }).
+		Return(`{"data":{"uuid":"t1","status":"draft"}}`, nil)
+
+	r := ollamarunner.NewSessionRunner(prov, ollamatools.New(script.srv.URL), "qwen2.5-coder:7b", zap.NewNop())
+	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
+		Provider: "ollama:qwen2.5-coder:7b", TaskDescription: "Design: add feature X",
+	})
+	require.NoError(s.T(), err)
+	status, outcome := waitTerminal(s.T(), r, id)
+
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "satisfied", outcome)
+	require.Equal(s.T(), "p1", createArgs["project_uuid"])
+	require.Equal(s.T(), true, createArgs["draft"])
+
+	var msgs []string
+	_ = r.StreamSession(context.Background(), id, func(e agentsvc.AgentRunEvent) error {
+		msgs = append(msgs, e.Message)
+		return nil
+	})
+	joined := strings.Join(msgs, "\n")
+	require.Contains(s.T(), joined, "wrote 1 tool call(s) as text")
+	// the stray prose line must not leak into the transcript as a message
+	require.NotContains(s.T(), joined, "assuming that worked")
+}
+
+func (s *RunnerSuite) TestRun_IgnoresInlineJSONForUnknownTool() {
+	// a JSON object that looks like a tool call but names a tool the runner
+	// does not offer must be treated as prose, not executed.
+	body := `{"message":{"role":"assistant","content":"{\"name\": \"rm_rf\", \"arguments\": {}}"},"done":true}`
+	script := newOllamaScript(body) // repeats forever
+	defer script.srv.Close()
+	prov, _ := toolMocks(s.T())
+
+	status, outcome := run(s.T(), script, prov)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "failed", outcome) // nudged once, then no tickets
 }
 
 func (s *RunnerSuite) TestRun_NudgesPastAPreTextTurn() {

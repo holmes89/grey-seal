@@ -236,11 +236,13 @@ func (r *SessionRunner) run(sessionID, design string) {
 	}
 
 	tools := make([]ollamatools.Tool, 0, len(defs))
+	offered := make(map[string]bool, len(defs))
 	for _, d := range defs {
 		if !r.allowed[d.Name] || skip[d.Name] {
 			continue
 		}
 		tools = append(tools, ollamatools.NewTool(d.Name, d.Description, d.InputSchema))
+		offered[d.Name] = true
 	}
 	if len(tools) == 0 {
 		fail("the MCP server exposes none of the expected ticket tools")
@@ -300,6 +302,19 @@ func (r *SessionRunner) run(sessionID, design string) {
 			return
 		}
 		text := stripThink(msg.Content)
+		// Small local models (qwen2.5-coder:7b in particular) often print the
+		// tool-call JSON into the message body instead of populating tool_calls.
+		// Recover those so the run can proceed instead of stalling on a nudge.
+		if len(msg.ToolCalls) == 0 {
+			if inline := parseInlineToolCalls(text, offered); len(inline) > 0 {
+				msg.ToolCalls = inline
+				text = ""
+				r.emit(sessionID, agentsvc.AgentRunEvent{
+					Type:    "agent.message",
+					Message: fmt.Sprintf("model wrote %d tool call(s) as text — running them", len(inline)),
+				})
+			}
+		}
 		msg.Content = text
 		messages = append(messages, msg)
 
@@ -438,6 +453,93 @@ func ticketCreated(result string) bool {
 		return false
 	}
 	return r.Code == "" && r.Data.UUID != ""
+}
+
+// parseInlineToolCalls extracts tool calls a model printed into its message
+// body rather than the tool_calls field. It accepts the shapes small local
+// models emit:
+//
+//	{"name": "create_ticket", "arguments": {…}}
+//	{"function": {"name": "create_ticket", "arguments": {…}}}
+//
+// with "parameters" accepted as an alias for "arguments". Only names in
+// offered are returned, so a JSON example inside a ticket body is ignored.
+func parseInlineToolCalls(content string, offered map[string]bool) []ollamatools.ToolCall {
+	var calls []ollamatools.ToolCall
+	for _, obj := range jsonObjects(content) {
+		var raw struct {
+			Name       string          `json:"name"`
+			Arguments  json.RawMessage `json:"arguments"`
+			Parameters json.RawMessage `json:"parameters"`
+			Function   *struct {
+				Name       string          `json:"name"`
+				Arguments  json.RawMessage `json:"arguments"`
+				Parameters json.RawMessage `json:"parameters"`
+			} `json:"function"`
+		}
+		if json.Unmarshal([]byte(obj), &raw) != nil {
+			continue
+		}
+		name, argsRaw := raw.Name, raw.Arguments
+		if len(argsRaw) == 0 {
+			argsRaw = raw.Parameters
+		}
+		if raw.Function != nil && raw.Function.Name != "" {
+			name = raw.Function.Name
+			argsRaw = raw.Function.Arguments
+			if len(argsRaw) == 0 {
+				argsRaw = raw.Function.Parameters
+			}
+		}
+		if name == "" || !offered[name] {
+			continue
+		}
+		args := map[string]any{}
+		if len(argsRaw) > 0 {
+			if json.Unmarshal(argsRaw, &args) != nil {
+				continue
+			}
+		}
+		var tc ollamatools.ToolCall
+		tc.Function.Name = name
+		tc.Function.Arguments = args
+		calls = append(calls, tc)
+	}
+	return calls
+}
+
+// jsonObjects returns the top-level {…} substrings of s, tracking string
+// literals so braces inside a string value don't skew the depth count.
+func jsonObjects(s string) []string {
+	var out []string
+	depth, start := 0, -1
+	inStr, esc := false, false
+	for i, r := range s {
+		switch {
+		case esc:
+			esc = false
+		case inStr && r == '\\':
+			esc = true
+		case r == '"':
+			inStr = !inStr
+		case inStr:
+			// inside a string literal — ignore structural characters
+		case r == '{':
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		case r == '}':
+			if depth > 0 {
+				depth--
+				if depth == 0 && start >= 0 {
+					out = append(out, s[start:i+1])
+					start = -1
+				}
+			}
+		}
+	}
+	return out
 }
 
 var thinkBlock = regexp.MustCompile(`(?is)<think>.*?</think>`)
