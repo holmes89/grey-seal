@@ -84,6 +84,9 @@ type chatRequest struct {
 	Stream   bool           `json:"stream"`
 	Think    bool           `json:"think"`
 	Options  map[string]any `json:"options,omitempty"`
+	// Format is Ollama's structured-output constraint: either the JSON string
+	// "json" or a JSON-Schema object. Sent only by ChatJSON.
+	Format json.RawMessage `json:"format,omitempty"`
 }
 
 // lowTemp keeps the tool-decision loop deterministic — a wandering sampler
@@ -99,7 +102,7 @@ type chatResponse struct {
 // Chat sends one non-streaming chat turn. It returns the assistant message
 // (Content and/or ToolCalls populated).
 func (c *Client) Chat(ctx context.Context, model string, messages []Message, tools []Tool) (Message, error) {
-	body, err := json.Marshal(chatRequest{
+	return c.do(ctx, chatRequest{
 		Model:    model,
 		Messages: messages,
 		Tools:    tools,
@@ -107,6 +110,25 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, too
 		Think:    false,
 		Options:  lowTemp,
 	})
+}
+
+// ChatJSON sends one non-streaming chat turn constrained to structured output.
+// format is Ollama's `format` value — the string "json" or a JSON-Schema
+// object. No tools are offered; the reply arrives as JSON text in
+// Message.Content for the caller to unmarshal.
+func (c *Client) ChatJSON(ctx context.Context, model string, messages []Message, format json.RawMessage) (Message, error) {
+	return c.do(ctx, chatRequest{
+		Model:    model,
+		Messages: messages,
+		Stream:   false,
+		Think:    false,
+		Options:  lowTemp,
+		Format:   format,
+	})
+}
+
+func (c *Client) do(ctx context.Context, cr chatRequest) (Message, error) {
+	body, err := json.Marshal(cr)
 	if err != nil {
 		return Message{}, fmt.Errorf("marshal chat request: %w", err)
 	}
@@ -136,12 +158,12 @@ func (c *Client) Chat(ctx context.Context, model string, messages []Message, too
 	for {
 		line, readErr := r.ReadBytes('\n')
 		if len(bytes.TrimSpace(line)) > 0 {
-			var cr chatResponse
-			if uErr := json.Unmarshal(line, &cr); uErr != nil {
+			var chunk chatResponse
+			if uErr := json.Unmarshal(line, &chunk); uErr != nil {
 				return Message{}, fmt.Errorf("decode ollama chat chunk: %w", uErr)
 			}
-			last = cr
-			if cr.Done {
+			last = chunk
+			if chunk.Done {
 				break
 			}
 		}
