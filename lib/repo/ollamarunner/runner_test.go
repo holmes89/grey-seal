@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -111,6 +112,62 @@ func (s *RunnerSuite) TestRun_CreatesDraftThenFinishes() {
 	require.Equal(s.T(), "satisfied", outcome)
 	require.Equal(s.T(), true, createArgs["draft"])
 	require.Equal(s.T(), "p1", createArgs["project_uuid"])
+}
+
+func (s *RunnerSuite) TestRun_EmitsProgressHeartbeats() {
+	script := newOllamaScript(respCreateTicket, respDone)
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Return(`{"data":{"uuid":"t1"}}`, nil)
+
+	r := ollamarunner.NewSessionRunner(prov, ollamatools.New(script.srv.URL), "qwen3:8b", zap.NewNop())
+	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
+		Provider: "ollama:qwen3:8b", TaskDescription: "d",
+	})
+	require.NoError(s.T(), err)
+	waitTerminal(s.T(), r, id)
+
+	var msgs []string
+	_ = r.StreamSession(context.Background(), id, func(e agentsvc.AgentRunEvent) error {
+		if e.Type == "agent.message" {
+			msgs = append(msgs, e.Message)
+		}
+		return nil
+	})
+	joined := strings.Join(msgs, "\n")
+	require.Contains(s.T(), joined, "connecting to the ticket tools")
+	require.Contains(s.T(), joined, "resolving the project list")
+	require.Contains(s.T(), joined, "turn 1/")
+}
+
+func (s *RunnerSuite) TestRun_TurnTimeout() {
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(3 * time.Second):
+		}
+	}))
+	defer slow.Close()
+	prov, _ := toolMocks(s.T())
+
+	r := ollamarunner.NewSessionRunner(prov, ollamatools.New(slow.URL), "m", zap.NewNop(),
+		ollamarunner.WithTimeouts(150*time.Millisecond, 5*time.Second))
+	id, err := r.StartSession(context.Background(), agentsvc.RunAgentTaskRequest{
+		Provider: "ollama:m", TaskDescription: "d",
+	})
+	require.NoError(s.T(), err)
+
+	status, outcome := waitTerminal(s.T(), r, id)
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "failed", outcome)
+
+	var msgs []string
+	_ = r.StreamSession(context.Background(), id, func(e agentsvc.AgentRunEvent) error {
+		msgs = append(msgs, e.Message)
+		return nil
+	})
+	require.Contains(s.T(), strings.Join(msgs, "\n"), "timed out")
 }
 
 func (s *RunnerSuite) TestRun_NudgesPastAPreTextTurn() {
