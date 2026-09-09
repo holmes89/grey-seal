@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // Client calls Ollama's /api/chat with tools enabled.
@@ -28,7 +29,9 @@ func New(host string) *Client {
 	if host == "" {
 		host = "http://localhost:11434"
 	}
-	return &Client{host: host, client: &http.Client{}}
+	// Backstop above the caller's per-turn context, in case ctx cancellation
+	// races the transport.
+	return &Client{host: host, client: &http.Client{Timeout: 12 * time.Minute}}
 }
 
 // Message is one chat message. Role is "system" | "user" | "assistant" |

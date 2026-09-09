@@ -8,6 +8,7 @@ package ollamarunner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -24,11 +25,16 @@ import (
 var _ agentsvc.SessionRunner = (*SessionRunner)(nil)
 
 const (
-	defaultMaxIterations = 16
-	// A CPU-bound local model (qwen3:8b) takes ~1-2 min per turn and a
-	// decomposition run is several turns; keep the ceiling generous.
-	defaultRunTimeout  = 25 * time.Minute
-	streamPollInterval = 300 * time.Millisecond
+	// A normal decomposition run is 2-4 model turns; 8 is ample headroom.
+	defaultMaxIterations = 8
+	// Per model turn. A CPU-bound local model can take minutes for the first
+	// turn; a turn that blows past this is treated as wedged and the run
+	// stops rather than hanging until defaultRunTimeout.
+	defaultTurnTimeout = 8 * time.Minute
+	// Whole-run ceiling (maxIter * turnTimeout worst case is well under this).
+	defaultRunTimeout   = 40 * time.Minute
+	resolveToolsTimeout = 30 * time.Second
+	streamPollInterval  = 300 * time.Millisecond
 )
 
 // systemPrompt steers the model through the design→draft-tickets task. It is
@@ -69,13 +75,14 @@ var allowedTools = map[string]bool{
 
 // SessionRunner drives ollama:<model> agent runs.
 type SessionRunner struct {
-	tools      agentsvc.ToolProvider
-	chat       *ollamatools.Client
-	model      string
-	logger     *zap.Logger
-	maxIter    int
-	runTimeout time.Duration
-	allowed    map[string]bool
+	tools       agentsvc.ToolProvider
+	chat        *ollamatools.Client
+	model       string
+	logger      *zap.Logger
+	maxIter     int
+	runTimeout  time.Duration
+	turnTimeout time.Duration
+	allowed     map[string]bool
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -88,19 +95,37 @@ type session struct {
 	done    chan struct{}
 }
 
+// Option tweaks a SessionRunner (mainly for tests).
+type Option func(*SessionRunner)
+
+// WithTimeouts overrides the per-turn and whole-run timeouts.
+func WithTimeouts(turn, run time.Duration) Option {
+	return func(r *SessionRunner) { r.turnTimeout, r.runTimeout = turn, run }
+}
+
+// WithMaxIterations overrides the model-turn cap.
+func WithMaxIterations(n int) Option {
+	return func(r *SessionRunner) { r.maxIter = n }
+}
+
 // NewSessionRunner builds a runner. model is the Ollama model name (the part
 // after "ollama:" in the provider string).
-func NewSessionRunner(tools agentsvc.ToolProvider, chat *ollamatools.Client, model string, logger *zap.Logger) *SessionRunner {
-	return &SessionRunner{
-		tools:      tools,
-		chat:       chat,
-		model:      model,
-		logger:     logger,
-		maxIter:    defaultMaxIterations,
-		runTimeout: defaultRunTimeout,
-		allowed:    allowedTools,
-		sessions:   make(map[string]*session),
+func NewSessionRunner(tools agentsvc.ToolProvider, chat *ollamatools.Client, model string, logger *zap.Logger, opts ...Option) *SessionRunner {
+	r := &SessionRunner{
+		tools:       tools,
+		chat:        chat,
+		model:       model,
+		logger:      logger,
+		maxIter:     defaultMaxIterations,
+		runTimeout:  defaultRunTimeout,
+		turnTimeout: defaultTurnTimeout,
+		allowed:     allowedTools,
+		sessions:    make(map[string]*session),
 	}
+	for _, o := range opts {
+		o(r)
+	}
+	return r
 }
 
 // StartSession kicks off the agent loop in a goroutine and returns a
@@ -172,13 +197,17 @@ func (r *SessionRunner) run(sessionID, design string) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.runTimeout)
 	defer cancel()
 
+	say := func(msg string) {
+		r.emit(sessionID, agentsvc.AgentRunEvent{Type: "agent.message", Message: msg})
+	}
 	fail := func(format string, args ...any) {
 		msg := fmt.Sprintf(format, args...)
 		r.logger.Warn("ollama agent run failed", zap.String("session_id", sessionID), zap.String("reason", msg))
-		r.emit(sessionID, agentsvc.AgentRunEvent{Type: "agent.message", Message: msg})
+		say(msg)
 		r.finish(sessionID, "failed")
 	}
 
+	say("starting — connecting to the ticket tools")
 	ts, err := r.tools.Session(ctx)
 	if err != nil {
 		fail("could not open tool session: %v", err)
@@ -194,12 +223,15 @@ func (r *SessionRunner) run(sessionID, design string) {
 	// Resolve the project list ourselves rather than trusting the model to
 	// call list_projects with the right (no) arguments — small local models
 	// stuff the project name into product_uuid and get nothing back.
+	say("resolving the project list…")
 	projectList := r.resolveProjects(ctx, ts)
 	sysPrompt := systemPrompt
 	skip := map[string]bool{}
 	if projectList == "" {
+		say("no project list from the server — the model will look it up")
 		sysPrompt = promptWithoutProjectList
 	} else {
+		say(fmt.Sprintf("using %d project(s)", strings.Count(projectList, "\n")))
 		skip["list_projects"] = true // the list is in the prompt; no need to call it
 	}
 
@@ -244,14 +276,23 @@ func (r *SessionRunner) run(sessionID, design string) {
 	}
 
 	for i := 0; i < r.maxIter; i++ {
-		msg, err := r.chat.Chat(ctx, r.model, messages, tools)
+		hb := fmt.Sprintf("asking %s to work on the design (turn %d/%d)…", r.model, i+1, r.maxIter)
+		if i == 0 {
+			hb += " — the first turn can take a few minutes on this host"
+		}
+		say(hb)
+
+		turnCtx, cancelTurn := context.WithTimeout(ctx, r.turnTimeout)
+		msg, err := r.chat.Chat(turnCtx, r.model, messages, tools)
+		cancelTurn()
 		if err != nil {
 			// A mid-run model error after tickets already exist is a partial
 			// success, not a hard failure — finishByCount decides.
-			r.emit(sessionID, agentsvc.AgentRunEvent{
-				Type:    "agent.message",
-				Message: fmt.Sprintf("model call failed: %v", err),
-			})
+			reason := fmt.Sprintf("model call failed: %v", err)
+			if errors.Is(err, context.DeadlineExceeded) {
+				reason = fmt.Sprintf("model turn timed out after %s — stopping", r.turnTimeout)
+			}
+			say(reason)
 			if created == 0 {
 				r.logger.Warn("ollama agent run failed", zap.String("session_id", sessionID), zap.Error(err))
 			}
@@ -357,7 +398,9 @@ func truncate(s string, n int) string {
 // resolveProjects calls list_projects (no args) and returns a newline list of
 // "name  <uuid>" rows, or "" if the call failed or returned nothing.
 func (r *SessionRunner) resolveProjects(ctx context.Context, ts agentsvc.ToolSession) string {
-	raw, err := ts.CallTool(ctx, "list_projects", map[string]any{})
+	rpCtx, cancel := context.WithTimeout(ctx, resolveToolsTimeout)
+	defer cancel()
+	raw, err := ts.CallTool(rpCtx, "list_projects", map[string]any{})
 	if err != nil {
 		r.logger.Warn("ollama agent: list_projects failed; falling back to model-driven lookup", zap.Error(err))
 		return ""
