@@ -52,6 +52,11 @@ type RunAgentTaskRequest struct {
 	PushBranch      string
 	TaskDescription string
 	Rubric          string
+	// ProjectUUID pins the Rabbit project for an "ollama:<model>" design run.
+	// When set, the runner creates every draft ticket in this project and the
+	// model is not asked to choose one; empty leaves the model to match a
+	// project by name from the design text. Unused for "aider".
+	ProjectUUID string
 }
 
 // AgentRunEvent is one relayed event from a running agent session.

@@ -124,6 +124,23 @@ func run(t *testing.T, script *ollamaScript, prov agentsvc.ToolProvider) (string
 	return status, outcome
 }
 
+// execReq runs one session with a caller-supplied request (e.g. carrying a
+// pinned ProjectUUID) and returns its outcome plus every agent.message.
+func execReq(t *testing.T, script *ollamaScript, prov agentsvc.ToolProvider, req agentsvc.RunAgentTaskRequest) (status, outcome string, msgs []string) {
+	t.Helper()
+	r := ollamarunner.NewSessionRunner(prov, ollamatools.New(script.srv.URL), "qwen3:8b", zap.NewNop())
+	id, err := r.StartSession(context.Background(), req)
+	require.NoError(t, err)
+	status, outcome = waitTerminal(t, r, id)
+	_ = r.StreamSession(context.Background(), id, func(e agentsvc.AgentRunEvent) error {
+		if e.Type == "agent.message" {
+			msgs = append(msgs, e.Message)
+		}
+		return nil
+	})
+	return
+}
+
 func (s *RunnerSuite) TestRun_PlansThenCreatesAllTickets() {
 	script := newOllamaScript(planBody("p1", tkt("A"), tkt("B"), tkt("C")))
 	defer script.srv.Close()
@@ -199,6 +216,44 @@ func (s *RunnerSuite) TestRun_FailsWhenProjectUnmatched() {
 	require.Equal(s.T(), "terminated", status)
 	require.Equal(s.T(), "failed", outcome)
 	require.Contains(s.T(), strings.Join(msgs, "\n"), "no listed project matched")
+}
+
+func (s *RunnerSuite) TestRun_UsesPinnedProject() {
+	// model reply carries a bogus project_uuid; the pinned one must win, and
+	// the model is served the tickets-only schema.
+	body := rawBody(`{"project_uuid":"wrong","tickets":[` + tkt("A") + `,` + tkt("B") + `]}`)
+	script := newOllamaScript(body)
+	defer script.srv.Close()
+	prov, sess := toolMocks(s.T())
+	var calls []map[string]any
+	sess.On("CallTool", mock.Anything, "create_ticket", mock.Anything).
+		Run(func(a mock.Arguments) { calls = append(calls, a.Get(2).(map[string]any)) }).
+		Return(`{"data":{"uuid":"11111111-1111-1111-1111-111111111111"}}`, nil)
+
+	status, outcome, msgs := execReq(s.T(), script, prov, agentsvc.RunAgentTaskRequest{
+		Provider: "ollama:qwen3:8b", TaskDescription: "Design: add feature X", ProjectUUID: "p1",
+	})
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "satisfied", outcome)
+	require.Len(s.T(), calls, 2)
+	for _, c := range calls {
+		require.Equal(s.T(), "p1", c["project_uuid"])
+		require.Equal(s.T(), true, c["draft"])
+	}
+	require.Contains(s.T(), strings.Join(msgs, "\n"), `drafting tickets for project "ahh"`)
+}
+
+func (s *RunnerSuite) TestRun_FailsWhenPinnedProjectUnknown() {
+	script := newOllamaScript(planBody("p1", tkt("A")))
+	defer script.srv.Close()
+	prov, _ := toolMocks(s.T()) // list_projects returns only p1/"ahh"
+
+	status, outcome, msgs := execReq(s.T(), script, prov, agentsvc.RunAgentTaskRequest{
+		Provider: "ollama:qwen3:8b", TaskDescription: "d", ProjectUUID: "ghost",
+	})
+	require.Equal(s.T(), "terminated", status)
+	require.Equal(s.T(), "failed", outcome)
+	require.Contains(s.T(), strings.Join(msgs, "\n"), "pinned project is not in Rabbit")
 }
 
 func (s *RunnerSuite) TestRun_MatchesProjectByName() {
