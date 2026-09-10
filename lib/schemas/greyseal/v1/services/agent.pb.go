@@ -24,20 +24,28 @@ const (
 
 type RunAgentTaskRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// provider: "claude" (only implemented value); "ollama:<model>" reserved.
+	// provider: "aider" (code-editing run) or "ollama:<model>" (in-process
+	// tool-calling run — task_description carries the input, e.g. a design to
+	// decompose into draft tickets; repo_url/github_token/branch are unused).
 	Provider string `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
 	RepoUrl  string `protobuf:"bytes,2,opt,name=repo_url,json=repoUrl,proto3" json:"repo_url,omitempty"`
-	// github_token authorizes cloning (and, for Claude, opening a PR against)
-	// repo_url. Never persisted — used only to start the provider session.
+	// github_token authorizes cloning and opening a PR against repo_url. Never
+	// persisted — used only to start the provider session. Unused for "ollama:".
 	GithubToken string `protobuf:"bytes,3,opt,name=github_token,json=githubToken,proto3" json:"github_token,omitempty"`
 	// branch to check out; defaults to the repository's default branch.
+	// Unused for "ollama:".
 	Branch string `protobuf:"bytes,4,opt,name=branch,proto3" json:"branch,omitempty"`
 	// task_description is what the agent should do.
 	TaskDescription string `protobuf:"bytes,5,opt,name=task_description,json=taskDescription,proto3" json:"task_description,omitempty"`
 	// rubric is the grading criteria for the provider's outcome-graded loop,
 	// e.g. "go build ./... succeeds, go test ./... passes, no
-	// TODO(agent) markers remain".
-	Rubric        string `protobuf:"bytes,6,opt,name=rubric,proto3" json:"rubric,omitempty"`
+	// TODO(agent) markers remain". Unused for "ollama:".
+	Rubric string `protobuf:"bytes,6,opt,name=rubric,proto3" json:"rubric,omitempty"`
+	// project_uuid pins the Rabbit project for an "ollama:<model>" design run:
+	// when set, the runner creates every draft ticket in this project and the
+	// model is not asked to choose one. Empty leaves the model to match a
+	// project by name from the design text. Unused for "aider".
+	ProjectUuid   string `protobuf:"bytes,7,opt,name=project_uuid,json=projectUuid,proto3" json:"project_uuid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -110,6 +118,13 @@ func (x *RunAgentTaskRequest) GetTaskDescription() string {
 func (x *RunAgentTaskRequest) GetRubric() string {
 	if x != nil {
 		return x.Rubric
+	}
+	return ""
+}
+
+func (x *RunAgentTaskRequest) GetProjectUuid() string {
+	if x != nil {
+		return x.ProjectUuid
 	}
 	return ""
 }
@@ -468,14 +483,15 @@ var File_schemas_greyseal_v1_services_agent_proto protoreflect.FileDescriptor
 
 const file_schemas_greyseal_v1_services_agent_proto_rawDesc = "" +
 	"\n" +
-	"(schemas/greyseal/v1/services/agent.proto\x12\x1cschemas.greyseal.services.v1\x1a\x1fschemas/greyseal/v1/agent.proto\"\xca\x01\n" +
+	"(schemas/greyseal/v1/services/agent.proto\x12\x1cschemas.greyseal.services.v1\x1a\x1fschemas/greyseal/v1/agent.proto\"\xed\x01\n" +
 	"\x13RunAgentTaskRequest\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x19\n" +
 	"\brepo_url\x18\x02 \x01(\tR\arepoUrl\x12!\n" +
 	"\fgithub_token\x18\x03 \x01(\tR\vgithubToken\x12\x16\n" +
 	"\x06branch\x18\x04 \x01(\tR\x06branch\x12)\n" +
 	"\x10task_description\x18\x05 \x01(\tR\x0ftaskDescription\x12\x16\n" +
-	"\x06rubric\x18\x06 \x01(\tR\x06rubric\"I\n" +
+	"\x06rubric\x18\x06 \x01(\tR\x06rubric\x12!\n" +
+	"\fproject_uuid\x18\a \x01(\tR\vprojectUuid\"I\n" +
 	"\x14RunAgentTaskResponse\x121\n" +
 	"\x04data\x18\x01 \x01(\v2\x1d.schemas.greyseal.v1.AgentRunR\x04data\"(\n" +
 	"\x12GetAgentRunRequest\x12\x12\n" +

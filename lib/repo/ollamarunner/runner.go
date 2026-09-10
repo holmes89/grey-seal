@@ -5,10 +5,14 @@
 // a software design into DRAFT rabbit tickets.
 //
 // The model is asked once, constrained by an Ollama `format` JSON schema, for
-// the whole plan ({project_uuid, tickets[]}); the runner then calls the
-// create_ticket MCP tool for each item itself. Small local models are weak at
-// multi-turn tool-calling but reliable at schema-constrained JSON, so this
-// removes that failure class. One corrective retry covers a bad plan.
+// the plan; the runner then calls the create_ticket MCP tool for each item
+// itself. Small local models are weak at multi-turn tool-calling but reliable
+// at schema-constrained JSON, so this removes that failure class. One
+// corrective retry covers a bad plan.
+//
+// If RunAgentTaskRequest.ProjectUUID is set the runner pins that project and
+// the model only returns {tickets[]}; otherwise the model also picks a
+// project by name and the runner validates its choice against list_projects.
 package ollamarunner
 
 import (
@@ -81,6 +85,40 @@ var planSchema = json.RawMessage(`{
   "required": ["project_uuid", "tickets"]
 }`)
 
+// fixedProjectPrompt is used when the caller pinned the project — the model
+// only breaks the design into tickets and never picks a project.
+const fixedProjectPrompt = `You decompose a software design into DRAFT tickets in a planning system called Rabbit.
+
+The Rabbit project is already chosen — do NOT pick one. Output ONLY JSON matching the schema (a "tickets" array) — no prose, no code fences.
+
+Break the design into small, independently shippable units of work — one ticket each:
+- title: a short imperative summary.
+- body: markdown saying what to do and why.
+- type: TICKET_TYPE_TASK, unless the unit is net-new user-facing capability (TICKET_TYPE_FEATURE) or fixing a defect (TICKET_TYPE_BUG).
+- priority: PRIORITY_MEDIUM, unless the unit is foundational or blocks other work (PRIORITY_HIGH) or is a nice-to-have (PRIORITY_LOW).`
+
+// ticketsSchema is the Ollama `format` constraint for a pinned-project run:
+// planSchema without the project_uuid field.
+var ticketsSchema = json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "tickets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "body": { "type": "string" },
+          "type": { "type": "string", "enum": ["TICKET_TYPE_FEATURE", "TICKET_TYPE_BUG", "TICKET_TYPE_TASK"] },
+          "priority": { "type": "string", "enum": ["PRIORITY_LOW", "PRIORITY_MEDIUM", "PRIORITY_HIGH"] }
+        },
+        "required": ["title", "body", "type", "priority"]
+      }
+    }
+  },
+  "required": ["tickets"]
+}`)
+
 // SessionRunner drives ollama:<model> agent runs.
 type SessionRunner struct {
 	tools       agentsvc.ToolProvider
@@ -139,7 +177,7 @@ func (r *SessionRunner) StartSession(_ context.Context, req agentsvc.RunAgentTas
 	r.sessions[id] = s
 	r.mu.Unlock()
 
-	go r.run(id, req.TaskDescription)
+	go r.run(id, req.TaskDescription, strings.TrimSpace(req.ProjectUUID))
 	return id, nil
 }
 
@@ -204,7 +242,7 @@ type plan struct {
 	Tickets     []planTicket `json:"tickets"`
 }
 
-func (r *SessionRunner) run(sessionID, design string) {
+func (r *SessionRunner) run(sessionID, design, fixedProject string) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.runTimeout)
 	defer cancel()
 
@@ -227,19 +265,68 @@ func (r *SessionRunner) run(sessionID, design string) {
 	defer ts.Close() //nolint:errcheck
 
 	// Resolve the project list ourselves — the deterministic path needs a
-	// uuid up front and small local models pass project names where a uuid is
-	// required.
+	// uuid up front, and even with a caller-pinned project we still validate
+	// it against Rabbit.
 	say("resolving the project list…")
 	projectList, byUUID, byName := r.resolveProjects(ctx, ts)
 	if projectList == "" {
 		fail("could not load the project list — cannot draft tickets")
 		return
 	}
-	say(fmt.Sprintf("using %d project(s)", len(byUUID)))
+
+	// Two modes: the caller pins the project (the UI knows which one the
+	// design belongs to), or the model matches one by name from the design.
+	var sysPrompt, userMsg string
+	var schema json.RawMessage
+	var parsePlan func(content string) (plan, string) // -> (plan, reason-if-unusable)
+
+	if fixedProject != "" {
+		name, ok := byUUID[fixedProject]
+		if !ok {
+			fail("the pinned project is not in Rabbit (%s)", fixedProject)
+			return
+		}
+		say(fmt.Sprintf("drafting tickets for project %q", name))
+		sysPrompt = fixedProjectPrompt
+		schema = ticketsSchema
+		userMsg = design + fmt.Sprintf("\n\nEvery ticket belongs to project %q.", name)
+		parsePlan = func(content string) (plan, string) {
+			var got struct {
+				Tickets []planTicket `json:"tickets"`
+			}
+			if json.Unmarshal([]byte(stripThink(content)), &got) != nil {
+				return plan{}, "the model did not return valid JSON"
+			}
+			if len(got.Tickets) == 0 {
+				return plan{}, "the plan contained no tickets"
+			}
+			return plan{ProjectUUID: fixedProject, Tickets: got.Tickets}, ""
+		}
+	} else {
+		say(fmt.Sprintf("using %d project(s)", len(byUUID)))
+		sysPrompt = planPrompt
+		schema = planSchema
+		userMsg = design + "\n\nProjects (name  <uuid>):\n" + projectList
+		parsePlan = func(content string) (plan, string) {
+			var cand plan
+			if json.Unmarshal([]byte(stripThink(content)), &cand) != nil {
+				return plan{}, "the model did not return valid JSON"
+			}
+			resolved, matched := matchProject(cand.ProjectUUID, byUUID, byName)
+			if !matched {
+				return plan{}, "no listed project matched the design"
+			}
+			if len(cand.Tickets) == 0 {
+				return plan{}, "the plan contained no tickets"
+			}
+			cand.ProjectUUID = resolved
+			return cand, ""
+		}
+	}
 
 	messages := []ollamatools.Message{
-		{Role: "system", Content: planPrompt},
-		{Role: "user", Content: design + "\n\nProjects (name  <uuid>):\n" + projectList},
+		{Role: "system", Content: sysPrompt},
+		{Role: "user", Content: userMsg},
 	}
 
 	var p plan
@@ -253,7 +340,7 @@ func (r *SessionRunner) run(sessionID, design string) {
 		say(hb)
 
 		turnCtx, cancelTurn := context.WithTimeout(ctx, r.turnTimeout)
-		msg, cerr := r.chat.ChatJSON(turnCtx, r.model, messages, planSchema)
+		msg, cerr := r.chat.ChatJSON(turnCtx, r.model, messages, schema)
 		cancelTurn()
 
 		if errors.Is(cerr, context.DeadlineExceeded) {
@@ -264,36 +351,27 @@ func (r *SessionRunner) run(sessionID, design string) {
 			lastReason = fmt.Sprintf("model call failed: %v", cerr)
 			r.logger.Warn("ollama agent: plan call failed", zap.String("session_id", sessionID), zap.Error(cerr))
 		} else {
-			var cand plan
-			switch {
-			case json.Unmarshal([]byte(stripThink(msg.Content)), &cand) != nil:
-				lastReason = "the model did not return valid JSON"
-			default:
-				resolved, matched := matchProject(cand.ProjectUUID, byUUID, byName)
-				switch {
-				case !matched:
-					lastReason = "no listed project matched the design"
-				case len(cand.Tickets) == 0:
-					lastReason = "the plan contained no tickets"
-				default:
-					cand.ProjectUUID = resolved
-					p = cand
-					planned = true
+			var reason string
+			p, reason = parsePlan(msg.Content)
+			if reason == "" {
+				planned = true
+			} else {
+				lastReason = reason
+				if attempt < maxPlanAttempts {
+					messages = append(messages, ollamatools.Message{Role: "assistant", Content: msg.Content})
 				}
-			}
-			if !planned && attempt < maxPlanAttempts {
-				messages = append(messages, ollamatools.Message{Role: "assistant", Content: msg.Content})
 			}
 		}
 
 		if !planned && attempt < maxPlanAttempts {
 			say(fmt.Sprintf("the plan was unusable (%s) — asking once more", lastReason))
-			messages = append(messages, ollamatools.Message{
-				Role: "user",
-				Content: fmt.Sprintf(
+			hint := fmt.Sprintf("That was unusable: %s. Return ONLY JSON matching the schema, with at least one ticket.", lastReason)
+			if fixedProject == "" {
+				hint = fmt.Sprintf(
 					"That was unusable: %s. Return ONLY JSON matching the schema. project_uuid MUST be exactly one of: %s. Include at least one ticket.",
-					lastReason, strings.Join(sortedKeys(byUUID), ", ")),
-			})
+					lastReason, strings.Join(sortedKeys(byUUID), ", "))
+			}
+			messages = append(messages, ollamatools.Message{Role: "user", Content: hint})
 		}
 	}
 

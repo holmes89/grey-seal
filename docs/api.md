@@ -96,8 +96,8 @@ AgentRun is the persisted state of one agentic coding-task run.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | uuid | [string](#string) |  |  |
-| provider | [string](#string) |  | provider: &#34;claude&#34; (Managed Agents) — the only implemented value in Phase 1. &#34;ollama:&lt;model&gt;&#34; is a reserved, not-yet-implemented value. |
-| repo_url | [string](#string) |  |  |
+| provider | [string](#string) |  | provider: &#34;aider&#34; (code-editing runs in disposable containers) or &#34;ollama:&lt;model&gt;&#34; (in-process tool-calling runs, e.g. design → draft tickets, with tools supplied over MCP). |
+| repo_url | [string](#string) |  | repo_url is set for &#34;aider&#34; runs; empty for &#34;ollama:&lt;model&gt;&#34; runs, which have no repository. |
 | status | [string](#string) |  | status: &#34;running&#34; | &#34;idle&#34; | &#34;terminated&#34; | &#34;error&#34;. |
 | session_id | [string](#string) |  | session_id is the provider&#39;s session identifier — for Claude this is a Managed Agents session ID, usable to build a Console trace-view link. |
 | pr_url | [string](#string) |  | pr_url is populated once the agent opens a pull request, if it does. |
@@ -373,12 +373,13 @@ AgentRunEvent is one relayed event from a running agent session.
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| provider | [string](#string) |  | provider: &#34;claude&#34; (only implemented value); &#34;ollama:&lt;model&gt;&#34; reserved. |
+| provider | [string](#string) |  | provider: &#34;aider&#34; (code-editing run) or &#34;ollama:&lt;model&gt;&#34; (in-process tool-calling run — task_description carries the input, e.g. a design to decompose into draft tickets; repo_url/github_token/branch are unused). |
 | repo_url | [string](#string) |  |  |
-| github_token | [string](#string) |  | github_token authorizes cloning (and, for Claude, opening a PR against) repo_url. Never persisted — used only to start the provider session. |
-| branch | [string](#string) |  | branch to check out; defaults to the repository&#39;s default branch. |
+| github_token | [string](#string) |  | github_token authorizes cloning and opening a PR against repo_url. Never persisted — used only to start the provider session. Unused for &#34;ollama:&#34;. |
+| branch | [string](#string) |  | branch to check out; defaults to the repository&#39;s default branch. Unused for &#34;ollama:&#34;. |
 | task_description | [string](#string) |  | task_description is what the agent should do. |
-| rubric | [string](#string) |  | rubric is the grading criteria for the provider&#39;s outcome-graded loop, e.g. &#34;go build ./... succeeds, go test ./... passes, no TODO(agent) markers remain&#34;. |
+| rubric | [string](#string) |  | rubric is the grading criteria for the provider&#39;s outcome-graded loop, e.g. &#34;go build ./... succeeds, go test ./... passes, no TODO(agent) markers remain&#34;. Unused for &#34;ollama:&#34;. |
+| project_uuid | [string](#string) |  | project_uuid pins the Rabbit project for an &#34;ollama:&lt;model&gt;&#34; design run: when set, the runner creates every draft ticket in this project and the model is not asked to choose one. Empty leaves the model to match a project by name from the design text. Unused for &#34;aider&#34;. |
 
 
 

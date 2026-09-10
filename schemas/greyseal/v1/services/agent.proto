@@ -40,6 +40,11 @@ message RunAgentTaskRequest {
   // e.g. "go build ./... succeeds, go test ./... passes, no
   // TODO(agent) markers remain". Unused for "ollama:".
   string rubric = 6;
+  // project_uuid pins the Rabbit project for an "ollama:<model>" design run:
+  // when set, the runner creates every draft ticket in this project and the
+  // model is not asked to choose one. Empty leaves the model to match a
+  // project by name from the design text. Unused for "aider".
+  string project_uuid = 7;
 }
 
 message RunAgentTaskResponse {
