@@ -17,6 +17,8 @@ import (
 	agentgrpc "github.com/holmes89/grey-seal/lib/greyseal/agent/grpc"
 	conversationsvc "github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	conversationgrpc "github.com/holmes89/grey-seal/lib/greyseal/conversation/grpc"
+	draftsvc "github.com/holmes89/grey-seal/lib/greyseal/draft"
+	draftgrpc "github.com/holmes89/grey-seal/lib/greyseal/draft/grpc"
 	resourcesvc "github.com/holmes89/grey-seal/lib/greyseal/resource"
 	resourcegrpc "github.com/holmes89/grey-seal/lib/greyseal/resource/grpc"
 	rolesvc "github.com/holmes89/grey-seal/lib/greyseal/role"
@@ -192,6 +194,17 @@ func main() {
 	} else {
 		logger.Warn("no agent provider configured — agent service route disabled")
 	}
+
+	// Planning document drafts (discovery docs, designs). Separate model from
+	// chat: drafting wants a stronger writer than the small chat default.
+	draftModel := os.Getenv("OLLAMA_DRAFT_MODEL")
+	if draftModel == "" {
+		draftModel = "qwen3:8b"
+	}
+	draftSvc := draftsvc.NewDraftService(ollama.NewDraftLLM(os.Getenv("OLLAMA_HOST"), draftModel), logger)
+	draftPath, draftHandler := servicesconnect.NewDraftServiceHandler(draftgrpc.NewDraftHandler(draftSvc))
+	logger.Info("registering draft service route", zap.String("path", draftPath), zap.String("model", draftModel))
+	srv.Handle(draftPath, draftHandler)
 
 	srv.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

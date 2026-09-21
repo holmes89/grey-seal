@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package schemas.greyseal.services.v1;
+
+// DraftService writes first drafts of planning documents — discovery docs
+// and designs — in the house templates, from source material the caller
+// supplies. It never stores anything: the caller reviews the draft and saves
+// it to the owning service (narwhal, rabbit).
+service DraftService {
+  // DraftDocument streams the draft's markdown as it is generated. The final
+  // message has done=true and carries the full body, plus proposed specs
+  // parsed from a design's "Domain objects" section.
+  rpc DraftDocument(DraftDocumentRequest) returns (stream DraftDocumentChunk) {}
+}
+
+enum DraftKind {
+  DRAFT_KIND_UNSPECIFIED = 0;
+  DRAFT_KIND_DISCOVERY   = 1;
+  DRAFT_KIND_DESIGN      = 2;
+}
+
+message DraftDocumentRequest {
+  DraftKind kind = 1;
+  string title = 2;
+  // source is the material to draft from, as markdown: the originating
+  // request, the parent discovery doc, the product's system doc.
+  string source = 3;
+  // current is the draft's existing body, if any, to improve on rather
+  // than start over.
+  string current = 4;
+}
+
+// ProposedSpec is one domain object from a design draft's "Domain objects"
+// table — the machine-readable input rabbit Specs are created from.
+message ProposedSpec {
+  string name = 1;
+  // operation: "create" | "modify" | "deprecate".
+  string operation = 2;
+  // depends_on names other proposed specs in the same draft.
+  repeated string depends_on = 3;
+}
+
+message DraftDocumentChunk {
+  // token is the next piece of markdown; empty on the final message.
+  string token = 1;
+  bool done = 2;
+  // body is the complete draft, set on the final message only.
+  string body = 3;
+  repeated ProposedSpec specs = 4;
+}
