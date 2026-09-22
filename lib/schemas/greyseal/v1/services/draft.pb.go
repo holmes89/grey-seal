@@ -27,6 +27,9 @@ const (
 	DraftKind_DRAFT_KIND_UNSPECIFIED DraftKind = 0
 	DraftKind_DRAFT_KIND_DISCOVERY   DraftKind = 1
 	DraftKind_DRAFT_KIND_DESIGN      DraftKind = 2
+	// A .proto for one domain object (a design Spec), in the shape beaver's
+	// generator consumes. title is the Spec name; proto_package is required.
+	DraftKind_DRAFT_KIND_PROTO DraftKind = 3
 )
 
 // Enum value maps for DraftKind.
@@ -35,11 +38,13 @@ var (
 		0: "DRAFT_KIND_UNSPECIFIED",
 		1: "DRAFT_KIND_DISCOVERY",
 		2: "DRAFT_KIND_DESIGN",
+		3: "DRAFT_KIND_PROTO",
 	}
 	DraftKind_value = map[string]int32{
 		"DRAFT_KIND_UNSPECIFIED": 0,
 		"DRAFT_KIND_DISCOVERY":   1,
 		"DRAFT_KIND_DESIGN":      2,
+		"DRAFT_KIND_PROTO":       3,
 	}
 )
 
@@ -79,7 +84,10 @@ type DraftDocumentRequest struct {
 	Source string `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
 	// current is the draft's existing body, if any, to improve on rather
 	// than start over.
-	Current       string `protobuf:"bytes,4,opt,name=current,proto3" json:"current,omitempty"`
+	Current string `protobuf:"bytes,4,opt,name=current,proto3" json:"current,omitempty"`
+	// proto_package is the proto package every file of the service shares
+	// (DRAFT_KIND_PROTO only), e.g. "shipping".
+	ProtoPackage  string `protobuf:"bytes,5,opt,name=proto_package,json=protoPackage,proto3" json:"proto_package,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -138,6 +146,13 @@ func (x *DraftDocumentRequest) GetSource() string {
 func (x *DraftDocumentRequest) GetCurrent() string {
 	if x != nil {
 		return x.Current
+	}
+	return ""
+}
+
+func (x *DraftDocumentRequest) GetProtoPackage() string {
+	if x != nil {
+		return x.ProtoPackage
 	}
 	return ""
 }
@@ -280,12 +295,13 @@ var File_schemas_greyseal_v1_services_draft_proto protoreflect.FileDescriptor
 
 const file_schemas_greyseal_v1_services_draft_proto_rawDesc = "" +
 	"\n" +
-	"(schemas/greyseal/v1/services/draft.proto\x12\x1cschemas.greyseal.services.v1\"\x9b\x01\n" +
+	"(schemas/greyseal/v1/services/draft.proto\x12\x1cschemas.greyseal.services.v1\"\xc0\x01\n" +
 	"\x14DraftDocumentRequest\x12;\n" +
 	"\x04kind\x18\x01 \x01(\x0e2'.schemas.greyseal.services.v1.DraftKindR\x04kind\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x16\n" +
 	"\x06source\x18\x03 \x01(\tR\x06source\x12\x18\n" +
-	"\acurrent\x18\x04 \x01(\tR\acurrent\"_\n" +
+	"\acurrent\x18\x04 \x01(\tR\acurrent\x12#\n" +
+	"\rproto_package\x18\x05 \x01(\tR\fprotoPackage\"_\n" +
 	"\fProposedSpec\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\toperation\x18\x02 \x01(\tR\toperation\x12\x1d\n" +
@@ -295,11 +311,12 @@ const file_schemas_greyseal_v1_services_draft_proto_rawDesc = "" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x12\n" +
 	"\x04done\x18\x02 \x01(\bR\x04done\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\x12@\n" +
-	"\x05specs\x18\x04 \x03(\v2*.schemas.greyseal.services.v1.ProposedSpecR\x05specs*X\n" +
+	"\x05specs\x18\x04 \x03(\v2*.schemas.greyseal.services.v1.ProposedSpecR\x05specs*n\n" +
 	"\tDraftKind\x12\x1a\n" +
 	"\x16DRAFT_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14DRAFT_KIND_DISCOVERY\x10\x01\x12\x15\n" +
-	"\x11DRAFT_KIND_DESIGN\x10\x022\x89\x01\n" +
+	"\x11DRAFT_KIND_DESIGN\x10\x02\x12\x14\n" +
+	"\x10DRAFT_KIND_PROTO\x10\x032\x89\x01\n" +
 	"\fDraftService\x12y\n" +
 	"\rDraftDocument\x122.schemas.greyseal.services.v1.DraftDocumentRequest\x1a0.schemas.greyseal.services.v1.DraftDocumentChunk\"\x000\x01B\x8c\x02\n" +
 	" com.schemas.greyseal.services.v1B\n" +

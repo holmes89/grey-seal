@@ -59,3 +59,22 @@ Rules:
 - Write Open questions as the table shown, each with a leaning.
 - Use only facts from the source material. Record anything unknown as an open question; never invent names, numbers or dates.
 - Be concise: short paragraphs and bullets, no filler.`
+
+// protoRules keeps drafted protos inside what beaver's generator accepts:
+// one top-level message per file (beaver requires a string uuid on every
+// top-level message), all files sharing the service's package, scalar,
+// enum and Timestamp fields, references to other objects by uuid.
+const protoRules = `You write Protocol Buffers definitions for one domain object of a Go service.
+Output only the .proto file contents — no markdown fences, no commentary.
+
+Rules:
+- First lines: syntax = "proto3"; then package <the given package>; exactly as given.
+- Define exactly one message, named exactly as the domain object (PascalCase). It is the entity the service stores. Do not define any other message.
+- Its first field is: string uuid = 1;
+- Field names are snake_case and numbered sequentially from 1.
+- Use proto3 scalar types (string, bool, int32, int64, double, bytes), enums defined in this file, repeated fields of those, and google.protobuf.Timestamp for points in time.
+- If you use google.protobuf.Timestamp, add: import "google/protobuf/timestamp.proto"; — it is the only import allowed. No map fields, no oneof.
+- Reference another domain object by its uuid: string <object>_uuid (snake_case).
+- Enums are named after what they classify; the first value is <ENUM_NAME>_UNSPECIFIED = 0, and every value is prefixed with the enum name in SCREAMING_SNAKE_CASE.
+- Add a short // comment above the message and above any field whose meaning is not obvious.
+- Include only fields the design supports; do not invent speculative ones.`
