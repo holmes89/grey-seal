@@ -9,6 +9,8 @@ const (
 	KindUnspecified Kind = iota
 	KindDiscovery
 	KindDesign
+	// KindProto drafts one domain object's .proto (Title is the Spec name).
+	KindProto
 )
 
 // DraftService writes first drafts of planning documents in the house
@@ -36,6 +38,8 @@ type DraftRequest struct {
 	// Current is the draft's existing body, to improve on rather than
 	// replace wholesale.
 	Current string
+	// ProtoPackage is the proto package for KindProto drafts.
+	ProtoPackage string
 }
 
 // Result is a finished draft.

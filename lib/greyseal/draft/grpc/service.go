@@ -29,14 +29,17 @@ func (h *DraftHandler) DraftDocument(ctx context.Context, req *connect.Request[s
 		kind = entity.KindDiscovery
 	case services.DraftKind_DRAFT_KIND_DESIGN:
 		kind = entity.KindDesign
+	case services.DraftKind_DRAFT_KIND_PROTO:
+		kind = entity.KindProto
 	default:
 		return connect.NewError(connect.CodeInvalidArgument, errKind)
 	}
 	res, err := h.svc.Draft(ctx, entity.DraftRequest{
-		Kind:    kind,
-		Title:   req.Msg.GetTitle(),
-		Source:  req.Msg.GetSource(),
-		Current: req.Msg.GetCurrent(),
+		Kind:         kind,
+		Title:        req.Msg.GetTitle(),
+		Source:       req.Msg.GetSource(),
+		Current:      req.Msg.GetCurrent(),
+		ProtoPackage: req.Msg.GetProtoPackage(),
 	}, func(token string) error {
 		return stream.Send(&services.DraftDocumentChunk{Token: token})
 	})
@@ -50,4 +53,4 @@ func (h *DraftHandler) DraftDocument(ctx context.Context, req *connect.Request[s
 	return stream.Send(&services.DraftDocumentChunk{Done: true, Body: res.Body, Specs: specs})
 }
 
-var errKind = errors.New("kind must be DRAFT_KIND_DISCOVERY or DRAFT_KIND_DESIGN")
+var errKind = errors.New("kind must be DRAFT_KIND_DISCOVERY, DRAFT_KIND_DESIGN or DRAFT_KIND_PROTO")

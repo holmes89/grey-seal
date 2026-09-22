@@ -139,3 +139,52 @@ func (s *parseSuite) TestDuplicateNamesKeepFirst() {
 	body := "## Domain objects\n| Foo | create | |\n| Foo | modify | |"
 	s.Equal([]draft.Spec{{Name: "Foo", Operation: "create"}}, draft.ParseDomainObjects(body))
 }
+
+func (s *DraftServiceSuite) TestProto_UsesProtoRulesPackageAndStripsFences() {
+	s.gen.On("Generate", mock.Anything,
+		mock.MatchedBy(func(sys string) bool {
+			return strings.Contains(sys, "Protocol Buffers") && strings.Contains(sys, "string uuid = 1;")
+		}),
+		mock.MatchedBy(func(p string) bool {
+			return strings.Contains(p, "Domain object: Shipment") && strings.Contains(p, "Package: shipping") &&
+				strings.Contains(p, "design body")
+		}),
+		mock.Anything,
+	).Return("```proto\nsyntax = \"proto3\";\npackage shipping;\n\nmessage Shipment {\n  string uuid = 1;\n}\n```", nil)
+
+	res, err := s.svc.Draft(context.Background(), draft.DraftRequest{
+		Kind: draft.KindProto, Title: "Shipment", ProtoPackage: "shipping", Source: "design body",
+	}, nil)
+
+	s.Require().NoError(err)
+	s.Equal("syntax = \"proto3\";\npackage shipping;\n\nmessage Shipment {\n  string uuid = 1;\n}\n", res.Body)
+	s.Empty(res.Specs)
+}
+
+func (s *DraftServiceSuite) TestProto_ValidatesPackageAndName() {
+	_, err := s.svc.Draft(context.Background(), draft.DraftRequest{Kind: draft.KindProto, Title: "Shipment", ProtoPackage: "Bad-Pkg"}, nil)
+	s.ErrorContains(err, "proto package")
+	_, err = s.svc.Draft(context.Background(), draft.DraftRequest{Kind: draft.KindProto, Title: "shipment line", ProtoPackage: "shipping"}, nil)
+	s.ErrorContains(err, "PascalCase")
+}
+
+func (s *DraftServiceSuite) TestProto_AddsMissingTimestampImport() {
+	s.gen.On("Generate", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return("syntax = \"proto3\";\npackage notes;\n\nmessage Revision {\n  string uuid = 1;\n  google.protobuf.Timestamp created_at = 2;\n}\n", nil)
+
+	res, err := s.svc.Draft(context.Background(), draft.DraftRequest{Kind: draft.KindProto, Title: "Revision", ProtoPackage: "notes"}, nil)
+	s.Require().NoError(err)
+	s.Equal("syntax = \"proto3\";\npackage notes;\n\nimport \"google/protobuf/timestamp.proto\";\n\nmessage Revision {\n  string uuid = 1;\n  google.protobuf.Timestamp created_at = 2;\n}\n", res.Body)
+}
+
+func (s *DraftServiceSuite) TestProto_KeepsExistingImportAndPlainProtos() {
+	withImport := "syntax = \"proto3\";\npackage notes;\n\nimport \"google/protobuf/timestamp.proto\";\n\nmessage R {\n  string uuid = 1;\n  google.protobuf.Timestamp at = 2;\n}\n"
+	plain := "syntax = \"proto3\";\npackage notes;\n\nmessage R {\n  string uuid = 1;\n}\n"
+	for _, body := range []string{withImport, plain} {
+		s.SetupTest()
+		s.gen.On("Generate", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(body, nil)
+		res, err := s.svc.Draft(context.Background(), draft.DraftRequest{Kind: draft.KindProto, Title: "R", ProtoPackage: "notes"}, nil)
+		s.Require().NoError(err)
+		s.Equal(body, res.Body)
+	}
+}

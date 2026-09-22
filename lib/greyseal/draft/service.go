@@ -28,8 +28,16 @@ func (s *draftService) Draft(ctx context.Context, req DraftRequest, emit func(to
 		system = discoveryRules
 	case KindDesign:
 		system = designRules
+	case KindProto:
+		system = protoRules
+		if !protoPackageRe.MatchString(req.ProtoPackage) {
+			return nil, fmt.Errorf("proto package %q must match [a-z][a-z0-9_]*", req.ProtoPackage)
+		}
+		if !protoMessageRe.MatchString(req.Title) {
+			return nil, fmt.Errorf("proto drafts need the domain object's PascalCase name as the title, got %q", req.Title)
+		}
 	default:
-		return nil, fmt.Errorf("draft kind must be discovery or design")
+		return nil, fmt.Errorf("draft kind must be discovery, design or proto")
 	}
 	if strings.TrimSpace(req.Title) == "" && strings.TrimSpace(req.Source) == "" {
 		return nil, fmt.Errorf("a title or source material is required")
@@ -42,6 +50,9 @@ func (s *draftService) Draft(ctx context.Context, req DraftRequest, emit func(to
 		return nil, err
 	}
 	body = stripThinking(body)
+	if req.Kind == KindProto {
+		body = ensureTimestampImport(stripFences(body))
+	}
 
 	res := &Result{Body: body}
 	if req.Kind == KindDesign {
@@ -52,7 +63,11 @@ func (s *draftService) Draft(ctx context.Context, req DraftRequest, emit func(to
 
 func userPrompt(req DraftRequest) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Title: %s\n", strings.TrimSpace(req.Title))
+	if req.Kind == KindProto {
+		fmt.Fprintf(&b, "Domain object: %s\nPackage: %s\n", strings.TrimSpace(req.Title), req.ProtoPackage)
+	} else {
+		fmt.Fprintf(&b, "Title: %s\n", strings.TrimSpace(req.Title))
+	}
 	if src := strings.TrimSpace(req.Source); src != "" {
 		fmt.Fprintf(&b, "\nSource material:\n%s\n", src)
 	}
@@ -62,7 +77,35 @@ func userPrompt(req DraftRequest) string {
 	return b.String()
 }
 
-var thinkBlock = regexp.MustCompile(`(?s)<think>.*?</think>`)
+var (
+	thinkBlock     = regexp.MustCompile(`(?s)<think>.*?</think>`)
+	fenceLine      = regexp.MustCompile("(?m)^\\s*```[a-z]*\\s*$\n?")
+	protoPackageRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	protoMessageRe = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
+)
+
+const timestampImport = `import "google/protobuf/timestamp.proto";`
+
+var packageLine = regexp.MustCompile(`(?m)^package [^;]+;[ \t]*$`)
+
+// ensureTimestampImport adds the Timestamp import when the model used
+// google.protobuf.Timestamp without it (it routinely does); protoc rejects
+// the file otherwise. The import goes right after the package line.
+func ensureTimestampImport(proto string) string {
+	if !strings.Contains(proto, "google.protobuf.Timestamp") || strings.Contains(proto, "google/protobuf/timestamp.proto") {
+		return proto
+	}
+	if loc := packageLine.FindStringIndex(proto); loc != nil {
+		return proto[:loc[1]] + "\n\n" + timestampImport + proto[loc[1]:]
+	}
+	return timestampImport + "\n\n" + proto
+}
+
+// stripFences drops markdown code fences a model wraps a file in despite
+// being told not to, so the saved .proto is the bare file.
+func stripFences(s string) string {
+	return strings.TrimSpace(fenceLine.ReplaceAllString(s, "")) + "\n"
+}
 
 // stripThinking drops reasoning blocks some models emit even when asked
 // not to, so they never land in a saved document.

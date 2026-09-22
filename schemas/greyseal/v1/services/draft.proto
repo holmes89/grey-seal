@@ -17,6 +17,9 @@ enum DraftKind {
   DRAFT_KIND_UNSPECIFIED = 0;
   DRAFT_KIND_DISCOVERY   = 1;
   DRAFT_KIND_DESIGN      = 2;
+  // A .proto for one domain object (a design Spec), in the shape beaver's
+  // generator consumes. title is the Spec name; proto_package is required.
+  DRAFT_KIND_PROTO       = 3;
 }
 
 message DraftDocumentRequest {
@@ -28,6 +31,9 @@ message DraftDocumentRequest {
   // current is the draft's existing body, if any, to improve on rather
   // than start over.
   string current = 4;
+  // proto_package is the proto package every file of the service shares
+  // (DRAFT_KIND_PROTO only), e.g. "shipping".
+  string proto_package = 5;
 }
 
 // ProposedSpec is one domain object from a design draft's "Domain objects"

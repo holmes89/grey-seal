@@ -78,3 +78,22 @@ func (s *DraftGRPCHandlerTestSuite) TestUnspecifiedKindIsInvalid() {
 	}
 	s.Equal(connect.CodeInvalidArgument, connect.CodeOf(stream.Err()))
 }
+
+func (s *DraftGRPCHandlerTestSuite) TestProtoKindPassesPackage() {
+	s.svc.On("Draft", mock.Anything,
+		draft.DraftRequest{Kind: draft.KindProto, Title: "Shipment", ProtoPackage: "shipping"},
+		mock.Anything,
+	).Return(&draft.Result{Body: "syntax = \"proto3\";\n"}, nil)
+
+	stream, err := s.client.DraftDocument(context.Background(), connect.NewRequest(&services.DraftDocumentRequest{
+		Kind: services.DraftKind_DRAFT_KIND_PROTO, Title: "Shipment", ProtoPackage: "shipping",
+	}))
+	s.Require().NoError(err)
+	var last *services.DraftDocumentChunk
+	for stream.Receive() {
+		last = stream.Msg()
+	}
+	s.Require().NoError(stream.Err())
+	s.True(last.GetDone())
+	s.Equal("syntax = \"proto3\";\n", last.GetBody())
+}
