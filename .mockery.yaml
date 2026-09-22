@@ -21,6 +21,15 @@ packages:
       outpkg: "mocks"
       mockname: "Mock{{.InterfaceName}}"
       filename: "mock_{{.InterfaceName | lower}}.go"
+  github.com/holmes89/grey-seal/lib/greyseal/draft:
+    config:
+      dir: "lib/greyseal/draft/mocks"
+      outpkg: "mocks"
+      mockname: "Mock{{.InterfaceName}}"
+      filename: "mock_{{.InterfaceName | lower}}.go"
+    interfaces:
+      DraftService:
+      Generator:
   github.com/holmes89/grey-seal/lib/greyseal/resource:
     config:
       dir: "lib/greyseal/resource/mocks"

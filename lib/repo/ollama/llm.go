@@ -14,10 +14,11 @@ import (
 
 // LLM calls the Ollama /api/chat endpoint with streaming support.
 type LLM struct {
-	host   string
-	model  string
-	think  bool
-	client *http.Client
+	host        string
+	model       string
+	think       bool
+	temperature *float64
+	client      *http.Client
 }
 
 // NewLLM creates an LLM using OLLAMA_HOST, OLLAMA_CHAT_MODEL, and OLLAMA_THINK env vars.
@@ -38,6 +39,26 @@ func NewLLM() *LLM {
 	}
 }
 
+// NewDraftLLM creates an LLM for document drafting: an explicit model, no
+// reasoning output, and a low temperature so drafts stay close to the
+// template and the source material.
+func NewDraftLLM(host, model string) *LLM {
+	if host == "" {
+		host = "http://localhost:11434"
+	}
+	t := 0.3
+	return &LLM{host: host, model: model, temperature: &t, client: &http.Client{}}
+}
+
+// Generate streams a completion for one system + user prompt. It satisfies
+// draft.Generator.
+func (l *LLM) Generate(ctx context.Context, system, prompt string, emit func(token string) error) (string, error) {
+	return l.Chat(ctx, []conversation.LLMMessage{
+		{Role: "system", Content: system},
+		{Role: "user", Content: prompt},
+	}, emit)
+}
+
 type ollamaMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -48,6 +69,7 @@ type chatRequest struct {
 	Messages []ollamaMessage `json:"messages"`
 	Stream   bool            `json:"stream"`
 	Think    bool            `json:"think"`
+	Options  map[string]any  `json:"options,omitempty"`
 }
 
 type chatChunk struct {
@@ -73,6 +95,9 @@ func (l *LLM) Chat(ctx context.Context, messages []conversation.LLMMessage, stre
 		Messages: ollamaMsgs,
 		Stream:   true,
 		Think:    l.think,
+	}
+	if l.temperature != nil {
+		reqBody.Options = map[string]any{"temperature": *l.temperature}
 	}
 
 	data, err := json.Marshal(reqBody)
