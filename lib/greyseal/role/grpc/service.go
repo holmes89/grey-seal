@@ -8,11 +8,11 @@ import (
 
 	entity "github.com/holmes89/grey-seal/lib/greyseal/role"
 	services "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services"
-	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
+	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesv1connect"
 )
 
 type RoleHandler struct {
-	servicesconnect.UnimplementedRoleServiceHandler
+	servicesv1connect.UnimplementedRoleServiceHandler
 	svc entity.RoleService
 }
 

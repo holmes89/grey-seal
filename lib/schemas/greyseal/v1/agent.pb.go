@@ -26,10 +26,13 @@ const (
 type AgentRun struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Uuid  string                 `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	// provider: "claude" (Managed Agents) — the only implemented value in
-	// Phase 1. "ollama:<model>" is a reserved, not-yet-implemented value.
+	// provider: "aider" (code-editing runs in disposable containers) or
+	// "ollama:<model>" (in-process tool-calling runs, e.g. design → draft
+	// tickets, with tools supplied over MCP).
 	Provider string `protobuf:"bytes,2,opt,name=provider,proto3" json:"provider,omitempty"`
-	RepoUrl  string `protobuf:"bytes,3,opt,name=repo_url,json=repoUrl,proto3" json:"repo_url,omitempty"`
+	// repo_url is set for "aider" runs; empty for "ollama:<model>" runs, which
+	// have no repository.
+	RepoUrl string `protobuf:"bytes,3,opt,name=repo_url,json=repoUrl,proto3" json:"repo_url,omitempty"`
 	// status: "running" | "idle" | "terminated" | "error".
 	Status string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	// session_id is the provider's session identifier — for Claude this is a

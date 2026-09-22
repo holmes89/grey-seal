@@ -9,11 +9,11 @@ import (
 	entity "github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	services "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services"
-	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
+	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesv1connect"
 )
 
 type ConversationHandler struct {
-	servicesconnect.UnimplementedConversationServiceHandler
+	servicesv1connect.UnimplementedConversationServiceHandler
 	svc entity.ConversationService
 }
 

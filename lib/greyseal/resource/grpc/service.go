@@ -7,12 +7,12 @@ import (
 
 	entity "github.com/holmes89/grey-seal/lib/greyseal/resource"
 	services "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services"
-	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
+	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesv1connect"
 )
 
 // ResourceHandler wraps ResourceService as a ConnectRPC handler.
 type ResourceHandler struct {
-	servicesconnect.UnimplementedResourceServiceHandler
+	servicesv1connect.UnimplementedResourceServiceHandler
 	svc entity.ResourceService
 }
 

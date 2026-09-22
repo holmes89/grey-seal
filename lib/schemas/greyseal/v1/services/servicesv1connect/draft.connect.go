@@ -2,7 +2,7 @@
 //
 // Source: schemas/greyseal/v1/services/draft.proto
 
-package servicesconnect
+package servicesv1connect
 
 import (
 	connect "connectrpc.com/connect"
