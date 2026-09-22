@@ -32,7 +32,7 @@ import (
 	"github.com/holmes89/grey-seal/lib/repo/ollamarunner"
 	"github.com/holmes89/grey-seal/lib/repo/ollamatools"
 	"github.com/holmes89/grey-seal/lib/repo/transcript"
-	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
+	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesv1connect"
 	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1/services"
 	shrikeconnect "github.com/holmes89/shrike/lib/schemas/shrike/v1/services/servicesv1connect"
 )
@@ -91,7 +91,7 @@ func main() {
 	// Role service
 	roleRepo := &repo.RoleRepo{Conn: store}
 	roleSvc := rolesvc.NewRoleService(roleRepo, logger)
-	rolePath, roleHandler := servicesconnect.NewRoleServiceHandler(rolegrpc.NewRoleHandler(roleSvc))
+	rolePath, roleHandler := servicesv1connect.NewRoleServiceHandler(rolegrpc.NewRoleHandler(roleSvc))
 	logger.Info("registering role service route", zap.String("path", rolePath))
 	srv.Handle(rolePath, roleHandler)
 
@@ -102,7 +102,7 @@ func main() {
 	}
 	resourceRepo := &repo.ResourceRepo{Conn: store}
 	resSvc := resourcesvc.NewResourceService(resourceRepo, indexer, logger)
-	resourcePath, resourceHandler := servicesconnect.NewResourceServiceHandler(resourcegrpc.NewResourceHandler(resSvc))
+	resourcePath, resourceHandler := servicesv1connect.NewResourceServiceHandler(resourcegrpc.NewResourceHandler(resSvc))
 	logger.Info("registering resource service route", zap.String("path", resourcePath))
 	srv.Handle(resourcePath, resourceHandler)
 
@@ -137,7 +137,7 @@ func main() {
 		logger,
 		transcriptWriter,
 	)
-	convPath, convHandler := servicesconnect.NewConversationServiceHandler(conversationgrpc.NewConversationHandler(convSvc))
+	convPath, convHandler := servicesv1connect.NewConversationServiceHandler(conversationgrpc.NewConversationHandler(convSvc))
 	logger.Info("registering conversation service route", zap.String("path", convPath))
 	srv.Handle(convPath, convHandler)
 
@@ -188,7 +188,7 @@ func main() {
 		agentRunRepo := &repo.AgentRunRepo{Conn: store}
 		prOpener := github.NewClient()
 		agentSvc := agentsvc.NewAgentService(aiderRunner, ollamaRunner, agentRunRepo, prOpener, logger)
-		agentPath, agentHandler := servicesconnect.NewAgentServiceHandler(agentgrpc.NewAgentHandler(agentSvc))
+		agentPath, agentHandler := servicesv1connect.NewAgentServiceHandler(agentgrpc.NewAgentHandler(agentSvc))
 		logger.Info("registering agent service route", zap.String("path", agentPath))
 		srv.Handle(agentPath, agentHandler)
 	} else {
@@ -202,7 +202,7 @@ func main() {
 		draftModel = "qwen3:8b"
 	}
 	draftSvc := draftsvc.NewDraftService(ollama.NewDraftLLM(os.Getenv("OLLAMA_HOST"), draftModel), logger)
-	draftPath, draftHandler := servicesconnect.NewDraftServiceHandler(draftgrpc.NewDraftHandler(draftSvc))
+	draftPath, draftHandler := servicesv1connect.NewDraftServiceHandler(draftgrpc.NewDraftHandler(draftSvc))
 	logger.Info("registering draft service route", zap.String("path", draftPath), zap.String("model", draftModel))
 	srv.Handle(draftPath, draftHandler)
 

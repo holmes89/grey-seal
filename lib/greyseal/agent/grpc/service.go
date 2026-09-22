@@ -7,11 +7,11 @@ import (
 
 	entity "github.com/holmes89/grey-seal/lib/greyseal/agent"
 	services "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services"
-	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
+	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesv1connect"
 )
 
 type AgentHandler struct {
-	servicesconnect.UnimplementedAgentServiceHandler
+	servicesv1connect.UnimplementedAgentServiceHandler
 	svc entity.AgentService
 }
 

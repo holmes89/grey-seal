@@ -50,6 +50,15 @@
   
     - [ConversationService](#schemas-greyseal-services-v1-ConversationService)
   
+- [schemas/greyseal/v1/services/draft.proto](#schemas_greyseal_v1_services_draft-proto)
+    - [DraftDocumentChunk](#schemas-greyseal-services-v1-DraftDocumentChunk)
+    - [DraftDocumentRequest](#schemas-greyseal-services-v1-DraftDocumentRequest)
+    - [ProposedSpec](#schemas-greyseal-services-v1-ProposedSpec)
+  
+    - [DraftKind](#schemas-greyseal-services-v1-DraftKind)
+  
+    - [DraftService](#schemas-greyseal-services-v1-DraftService)
+  
 - [schemas/greyseal/v1/services/resource.proto](#schemas_greyseal_v1_services_resource-proto)
     - [DeleteResourceRequest](#schemas-greyseal-services-v1-DeleteResourceRequest)
     - [DeleteResourceResponse](#schemas-greyseal-services-v1-DeleteResourceResponse)
@@ -678,6 +687,102 @@ resource references and uuid set.
 | DeleteConversation | [DeleteConversationRequest](#schemas-greyseal-services-v1-DeleteConversationRequest) | [DeleteConversationResponse](#schemas-greyseal-services-v1-DeleteConversationResponse) |  |
 | Chat | [ChatRequest](#schemas-greyseal-services-v1-ChatRequest) | [ChatResponse](#schemas-greyseal-services-v1-ChatResponse) stream | Chat sends a user message and streams back the assistant response token by token. |
 | SubmitFeedback | [SubmitFeedbackRequest](#schemas-greyseal-services-v1-SubmitFeedbackRequest) | [SubmitFeedbackResponse](#schemas-greyseal-services-v1-SubmitFeedbackResponse) | SubmitFeedback records user feedback on an assistant message. |
+
+ 
+
+
+
+<a name="schemas_greyseal_v1_services_draft-proto"></a>
+<p align="right"><a href="#top">Top</a></p>
+
+## schemas/greyseal/v1/services/draft.proto
+
+
+
+<a name="schemas-greyseal-services-v1-DraftDocumentChunk"></a>
+
+### DraftDocumentChunk
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| token | [string](#string) |  | token is the next piece of markdown; empty on the final message. |
+| done | [bool](#bool) |  |  |
+| body | [string](#string) |  | body is the complete draft, set on the final message only. |
+| specs | [ProposedSpec](#schemas-greyseal-services-v1-ProposedSpec) | repeated |  |
+
+
+
+
+
+
+<a name="schemas-greyseal-services-v1-DraftDocumentRequest"></a>
+
+### DraftDocumentRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| kind | [DraftKind](#schemas-greyseal-services-v1-DraftKind) |  |  |
+| title | [string](#string) |  |  |
+| source | [string](#string) |  | source is the material to draft from, as markdown: the originating request, the parent discovery doc, the product&#39;s system doc. |
+| current | [string](#string) |  | current is the draft&#39;s existing body, if any, to improve on rather than start over. |
+
+
+
+
+
+
+<a name="schemas-greyseal-services-v1-ProposedSpec"></a>
+
+### ProposedSpec
+ProposedSpec is one domain object from a design draft&#39;s &#34;Domain objects&#34;
+table — the machine-readable input rabbit Specs are created from.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| name | [string](#string) |  |  |
+| operation | [string](#string) |  | operation: &#34;create&#34; | &#34;modify&#34; | &#34;deprecate&#34;. |
+| depends_on | [string](#string) | repeated | depends_on names other proposed specs in the same draft. |
+
+
+
+
+
+ 
+
+
+<a name="schemas-greyseal-services-v1-DraftKind"></a>
+
+### DraftKind
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| DRAFT_KIND_UNSPECIFIED | 0 |  |
+| DRAFT_KIND_DISCOVERY | 1 |  |
+| DRAFT_KIND_DESIGN | 2 |  |
+
+
+ 
+
+ 
+
+
+<a name="schemas-greyseal-services-v1-DraftService"></a>
+
+### DraftService
+DraftService writes first drafts of planning documents — discovery docs
+and designs — in the house templates, from source material the caller
+supplies. It never stores anything: the caller reviews the draft and saves
+it to the owning service (narwhal, rabbit).
+
+| Method Name | Request Type | Response Type | Description |
+| ----------- | ------------ | ------------- | ------------|
+| DraftDocument | [DraftDocumentRequest](#schemas-greyseal-services-v1-DraftDocumentRequest) | [DraftDocumentChunk](#schemas-greyseal-services-v1-DraftDocumentChunk) stream | DraftDocument streams the draft&#39;s markdown as it is generated. The final message has done=true and carries the full body, plus proposed specs parsed from a design&#39;s &#34;Domain objects&#34; section. |
 
  
 

@@ -11,7 +11,7 @@ import (
 	grpchandler "github.com/holmes89/grey-seal/lib/greyseal/draft/grpc"
 	"github.com/holmes89/grey-seal/lib/greyseal/draft/mocks"
 	services "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services"
-	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
+	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesv1connect"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
@@ -19,7 +19,7 @@ import (
 type DraftGRPCHandlerTestSuite struct {
 	suite.Suite
 	svc    *mocks.MockDraftService
-	client servicesconnect.DraftServiceClient
+	client servicesv1connect.DraftServiceClient
 	server *httptest.Server
 }
 
@@ -30,9 +30,9 @@ func TestDraftGRPCHandlerTestSuite(t *testing.T) {
 func (s *DraftGRPCHandlerTestSuite) SetupTest() {
 	s.svc = mocks.NewMockDraftService(s.T())
 	mux := http.NewServeMux()
-	mux.Handle(servicesconnect.NewDraftServiceHandler(grpchandler.NewDraftHandler(s.svc)))
+	mux.Handle(servicesv1connect.NewDraftServiceHandler(grpchandler.NewDraftHandler(s.svc)))
 	s.server = httptest.NewServer(mux)
-	s.client = servicesconnect.NewDraftServiceClient(s.server.Client(), s.server.URL)
+	s.client = servicesv1connect.NewDraftServiceClient(s.server.Client(), s.server.URL)
 }
 
 func (s *DraftGRPCHandlerTestSuite) TearDownTest() {

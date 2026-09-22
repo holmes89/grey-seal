@@ -8,7 +8,7 @@ import (
 	"connectrpc.com/connect"
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	services "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services"
-	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesconnect"
+	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesv1connect"
 	"github.com/spf13/cobra"
 )
 
@@ -49,7 +49,7 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	}
 
 	baseURL := "http://" + ingestServer
-	client := servicesconnect.NewResourceServiceClient(http.DefaultClient, baseURL, connect.WithGRPCWeb())
+	client := servicesv1connect.NewResourceServiceClient(http.DefaultClient, baseURL, connect.WithGRPCWeb())
 
 	req := connect.NewRequest(&services.IngestResourceRequest{Data: r})
 	resp, err := client.IngestResource(context.Background(), req)
