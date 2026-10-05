@@ -146,18 +146,18 @@ func (s *DraftServiceSuite) TestProto_UsesProtoRulesPackageAndStripsFences() {
 			return strings.Contains(sys, "Protocol Buffers") && strings.Contains(sys, "string uuid = 1;")
 		}),
 		mock.MatchedBy(func(p string) bool {
-			return strings.Contains(p, "Domain object: Shipment") && strings.Contains(p, "Package: shipping") &&
+			return strings.Contains(p, "Domain object: Shipment") && strings.Contains(p, "Package: schemas.shipping.v1") &&
 				strings.Contains(p, "design body")
 		}),
 		mock.Anything,
-	).Return("```proto\nsyntax = \"proto3\";\npackage shipping;\n\nmessage Shipment {\n  string uuid = 1;\n}\n```", nil)
+	).Return("```proto\nsyntax = \"proto3\";\npackage schemas.shipping.v1;\n\nmessage Shipment {\n  string uuid = 1;\n}\n```", nil)
 
 	res, err := s.svc.Draft(context.Background(), draft.DraftRequest{
 		Kind: draft.KindProto, Title: "Shipment", ProtoPackage: "shipping", Source: "design body",
 	}, nil)
 
 	s.Require().NoError(err)
-	s.Equal("syntax = \"proto3\";\npackage shipping;\n\nmessage Shipment {\n  string uuid = 1;\n}\n", res.Body)
+	s.Equal("syntax = \"proto3\";\npackage schemas.shipping.v1;\n\nmessage Shipment {\n  string uuid = 1;\n}\n", res.Body)
 	s.Empty(res.Specs)
 }
 
