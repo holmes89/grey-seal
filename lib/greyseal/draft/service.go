@@ -64,7 +64,13 @@ func (s *draftService) Draft(ctx context.Context, req DraftRequest, emit func(to
 func userPrompt(req DraftRequest) string {
 	var b strings.Builder
 	if req.Kind == KindProto {
-		fmt.Fprintf(&b, "Domain object: %s\nPackage: %s\n", strings.TrimSpace(req.Title), req.ProtoPackage)
+		// Beaver's generator expects every service's own protos under the
+		// "schemas.<service>" package, not the bare service slug — give the
+		// model that fully-qualified package up front rather than relying on
+		// a later normalization pass to rewrite just the package line (which
+		// can leave sibling-file import/reference paths computed against the
+		// original bare package out of sync with it).
+		fmt.Fprintf(&b, "Domain object: %s\nPackage: schemas.%s\n", strings.TrimSpace(req.Title), req.ProtoPackage)
 	} else {
 		fmt.Fprintf(&b, "Title: %s\n", strings.TrimSpace(req.Title))
 	}
