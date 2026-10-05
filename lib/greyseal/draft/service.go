@@ -65,12 +65,14 @@ func userPrompt(req DraftRequest) string {
 	var b strings.Builder
 	if req.Kind == KindProto {
 		// Beaver's generator expects every service's own protos under the
-		// "schemas.<service>" package, not the bare service slug — give the
-		// model that fully-qualified package up front rather than relying on
-		// a later normalization pass to rewrite just the package line (which
-		// can leave sibling-file import/reference paths computed against the
-		// original bare package out of sync with it).
-		fmt.Fprintf(&b, "Domain object: %s\nPackage: schemas.%s\n", strings.TrimSpace(req.Title), req.ProtoPackage)
+		// "schemas.<service>.v1" package — both the file layout it writes
+		// (schemas/<service>/v1/) and the import path it derives from the
+		// package string (TemplateData.ProtoImportPath, a literal dot-to-
+		// slash replace with no separate "v1" insertion) assume that
+		// trailing version segment. Give the model the fully-qualified
+		// package up front rather than relying on a later normalization
+		// pass, which only ever rewrites the package line itself.
+		fmt.Fprintf(&b, "Domain object: %s\nPackage: schemas.%s.v1\n", strings.TrimSpace(req.Title), req.ProtoPackage)
 	} else {
 		fmt.Fprintf(&b, "Title: %s\n", strings.TrimSpace(req.Title))
 	}
