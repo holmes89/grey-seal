@@ -45,6 +45,11 @@ message RunAgentTaskRequest {
   // model is not asked to choose one. Empty leaves the model to match a
   // project by name from the design text. Unused for "aider".
   string project_uuid = 7;
+  // push_branch is an optional hint for the branch the run pushes finished
+  // work to — sanitized and prefixed with "agent/" server-side (e.g. a
+  // ticket key "FOX-7" becomes "agent/fox-7"). A random "agent/<uuid>" is
+  // used when empty. Unused for "ollama:".
+  string push_branch = 8;
 }
 
 message RunAgentTaskResponse {

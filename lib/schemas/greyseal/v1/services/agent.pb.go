@@ -45,7 +45,12 @@ type RunAgentTaskRequest struct {
 	// when set, the runner creates every draft ticket in this project and the
 	// model is not asked to choose one. Empty leaves the model to match a
 	// project by name from the design text. Unused for "aider".
-	ProjectUuid   string `protobuf:"bytes,7,opt,name=project_uuid,json=projectUuid,proto3" json:"project_uuid,omitempty"`
+	ProjectUuid string `protobuf:"bytes,7,opt,name=project_uuid,json=projectUuid,proto3" json:"project_uuid,omitempty"`
+	// push_branch is an optional hint for the branch the run pushes finished
+	// work to — sanitized and prefixed with "agent/" server-side (e.g. a
+	// ticket key "FOX-7" becomes "agent/fox-7"). A random "agent/<uuid>" is
+	// used when empty. Unused for "ollama:".
+	PushBranch    string `protobuf:"bytes,8,opt,name=push_branch,json=pushBranch,proto3" json:"push_branch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -125,6 +130,13 @@ func (x *RunAgentTaskRequest) GetRubric() string {
 func (x *RunAgentTaskRequest) GetProjectUuid() string {
 	if x != nil {
 		return x.ProjectUuid
+	}
+	return ""
+}
+
+func (x *RunAgentTaskRequest) GetPushBranch() string {
+	if x != nil {
+		return x.PushBranch
 	}
 	return ""
 }
@@ -483,7 +495,7 @@ var File_schemas_greyseal_v1_services_agent_proto protoreflect.FileDescriptor
 
 const file_schemas_greyseal_v1_services_agent_proto_rawDesc = "" +
 	"\n" +
-	"(schemas/greyseal/v1/services/agent.proto\x12\x1cschemas.greyseal.services.v1\x1a\x1fschemas/greyseal/v1/agent.proto\"\xed\x01\n" +
+	"(schemas/greyseal/v1/services/agent.proto\x12\x1cschemas.greyseal.services.v1\x1a\x1fschemas/greyseal/v1/agent.proto\"\x8e\x02\n" +
 	"\x13RunAgentTaskRequest\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x19\n" +
 	"\brepo_url\x18\x02 \x01(\tR\arepoUrl\x12!\n" +
@@ -491,7 +503,9 @@ const file_schemas_greyseal_v1_services_agent_proto_rawDesc = "" +
 	"\x06branch\x18\x04 \x01(\tR\x06branch\x12)\n" +
 	"\x10task_description\x18\x05 \x01(\tR\x0ftaskDescription\x12\x16\n" +
 	"\x06rubric\x18\x06 \x01(\tR\x06rubric\x12!\n" +
-	"\fproject_uuid\x18\a \x01(\tR\vprojectUuid\"I\n" +
+	"\fproject_uuid\x18\a \x01(\tR\vprojectUuid\x12\x1f\n" +
+	"\vpush_branch\x18\b \x01(\tR\n" +
+	"pushBranch\"I\n" +
 	"\x14RunAgentTaskResponse\x121\n" +
 	"\x04data\x18\x01 \x01(\v2\x1d.schemas.greyseal.v1.AgentRunR\x04data\"(\n" +
 	"\x12GetAgentRunRequest\x12\x12\n" +

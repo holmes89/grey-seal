@@ -305,6 +305,23 @@ func TestPRTitle(t *testing.T) {
 	}
 }
 
+func TestSanitizeBranchHint(t *testing.T) {
+	cases := map[string]string{
+		"FOX-7":           "fox-7",
+		"fox-7":           "fox-7",
+		"FOX--7":          "fox-7",
+		"  FOX 7  ":       "fox-7",
+		"":                "",
+		"---":             "",
+		"Add dark/@!mode": "add-dark-mode",
+	}
+	for in, want := range cases {
+		if got := sanitizeBranchHint(in); got != want {
+			t.Errorf("sanitizeBranchHint(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestWithBranchInstructions(t *testing.T) {
 	got := withBranchInstructions("do the task", "agent/abc")
 	if got == "do the task" {
