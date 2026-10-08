@@ -187,7 +187,16 @@ func main() {
 	if aiderRunner != nil || ollamaRunner != nil {
 		agentRunRepo := &repo.AgentRunRepo{Conn: store}
 		prOpener := github.NewClient()
-		agentSvc := agentsvc.NewAgentService(aiderRunner, ollamaRunner, agentRunRepo, prOpener, logger)
+		// Falls back for a run whose request leaves github_token empty —
+		// same "configure once, reuse every run" shape as beaver's own
+		// GITHUB_TOKEN (see beaver/cmd/worker/main.go's
+		// configurePrivateModuleAccess). A caller-supplied token (still
+		// supported) takes priority when present.
+		systemGithubToken := os.Getenv("GITHUB_TOKEN")
+		if systemGithubToken == "" {
+			logger.Warn("GITHUB_TOKEN not set — agent runs will need a github_token in every request")
+		}
+		agentSvc := agentsvc.NewAgentService(aiderRunner, ollamaRunner, agentRunRepo, prOpener, systemGithubToken, logger)
 		agentPath, agentHandler := servicesv1connect.NewAgentServiceHandler(agentgrpc.NewAgentHandler(agentSvc))
 		logger.Info("registering agent service route", zap.String("path", agentPath))
 		srv.Handle(agentPath, agentHandler)

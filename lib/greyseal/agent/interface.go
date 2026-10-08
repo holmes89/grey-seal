@@ -57,6 +57,11 @@ type RunAgentTaskRequest struct {
 	// model is not asked to choose one; empty leaves the model to match a
 	// project by name from the design text. Unused for "aider".
 	ProjectUUID string
+	// PushBranchHint is the caller's raw suggestion for PushBranch (e.g. a
+	// ticket key) — sanitized and prefixed with "agent/" by RunAgentTask
+	// before becoming the real PushBranch. Empty means a random
+	// "agent/<uuid>" is generated instead.
+	PushBranchHint string
 }
 
 // AgentRunEvent is one relayed event from a running agent session.

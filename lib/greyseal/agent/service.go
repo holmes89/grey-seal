@@ -35,19 +35,26 @@ type agentService struct {
 	prOpener     PullRequestOpener
 	logger       *zap.Logger
 
+	// systemGithubToken is used for a run whose request leaves GithubToken
+	// empty — same "configure once, reuse every run" pattern as beaver's
+	// own GITHUB_TOKEN handling. "" disables the fallback (the request must
+	// supply its own token, same as before this existed).
+	systemGithubToken string
+
 	pollInterval time.Duration
 	watchTimeout time.Duration
 }
 
-func NewAgentService(runner, ollamaRunner SessionRunner, repo AgentRunRepository, prOpener PullRequestOpener, logger *zap.Logger) AgentService {
+func NewAgentService(runner, ollamaRunner SessionRunner, repo AgentRunRepository, prOpener PullRequestOpener, systemGithubToken string, logger *zap.Logger) AgentService {
 	return &agentService{
-		runner:       runner,
-		ollamaRunner: ollamaRunner,
-		repo:         repo,
-		prOpener:     prOpener,
-		logger:       logger,
-		pollInterval: defaultWatchPollInterval,
-		watchTimeout: defaultWatchTimeout,
+		runner:            runner,
+		ollamaRunner:      ollamaRunner,
+		repo:              repo,
+		prOpener:          prOpener,
+		systemGithubToken: systemGithubToken,
+		logger:            logger,
+		pollInterval:      defaultWatchPollInterval,
+		watchTimeout:      defaultWatchTimeout,
 	}
 }
 
@@ -75,6 +82,14 @@ func (srv *agentService) RunAgentTask(ctx context.Context, req RunAgentTaskReque
 func (srv *agentService) runAiderTask(ctx context.Context, req RunAgentTaskRequest) (*greysealv1.AgentRun, error) {
 	runUUID := uuid.New().String()
 	branchName := "agent/" + runUUID
+	if hint := sanitizeBranchHint(req.PushBranchHint); hint != "" {
+		branchName = "agent/" + hint
+	}
+
+	githubToken := req.GithubToken
+	if githubToken == "" {
+		githubToken = srv.systemGithubToken
+	}
 
 	srv.logger.Info("starting agent run",
 		zap.String("provider", req.Provider),
@@ -83,6 +98,7 @@ func (srv *agentService) runAiderTask(ctx context.Context, req RunAgentTaskReque
 	)
 
 	startReq := req
+	startReq.GithubToken = githubToken
 	startReq.PushBranch = branchName
 	startReq.TaskDescription = withBranchInstructions(req.TaskDescription, branchName)
 
@@ -113,7 +129,7 @@ func (srv *agentService) runAiderTask(ctx context.Context, req RunAgentTaskReque
 		runUUID:     runUUID,
 		sessionID:   sessionID,
 		runner:      srv.runner,
-		githubToken: req.GithubToken,
+		githubToken: githubToken,
 		repoURL:     req.RepoURL,
 		branch:      branchName,
 		title:       prTitle(req.TaskDescription),
@@ -177,6 +193,26 @@ func withBranchInstructions(taskDescription, branchName string) string {
 		"%s\n\nWhen your changes satisfy the rubric, commit them and push to a new branch named exactly %q on the \"origin\" remote. Do not open a pull request yourself — that is handled separately.",
 		taskDescription, branchName,
 	)
+}
+
+// sanitizeBranchHint turns free text (e.g. a ticket key like "FOX-7") into a
+// valid, predictable git branch-name component: lowercase, runs of
+// non-alphanumeric characters collapsed to a single "-", and leading/
+// trailing "-" trimmed. Same shape as the frontend's serviceSlug helper.
+func sanitizeBranchHint(s string) string {
+	var b strings.Builder
+	lastDash := false
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastDash = false
+		case !lastDash && b.Len() > 0:
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.TrimSuffix(b.String(), "-")
 }
 
 // prTitle derives a short PR title from a (possibly long, multi-line) task

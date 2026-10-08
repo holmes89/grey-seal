@@ -28,6 +28,7 @@ func (h *AgentHandler) RunAgentTask(ctx context.Context, req *connect.Request[se
 		TaskDescription: req.Msg.GetTaskDescription(),
 		Rubric:          req.Msg.GetRubric(),
 		ProjectUUID:     req.Msg.GetProjectUuid(),
+		PushBranchHint:  req.Msg.GetPushBranch(),
 	})
 	if err != nil {
 		return nil, err

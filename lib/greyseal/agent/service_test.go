@@ -28,7 +28,7 @@ func (s *AgentServiceTestSuite) SetupTest() {
 	s.ollamaRunner = mocks.NewMockSessionRunner(s.T())
 	s.repo = mocks.NewMockAgentRunRepository(s.T())
 	s.prOpener = mocks.NewMockPullRequestOpener(s.T())
-	s.svc = agent.NewAgentService(s.runner, s.ollamaRunner, s.repo, s.prOpener, zap.NewNop())
+	s.svc = agent.NewAgentService(s.runner, s.ollamaRunner, s.repo, s.prOpener, "", zap.NewNop())
 }
 
 func TestRunAgentServiceTestSuite(t *testing.T) {
@@ -105,6 +105,62 @@ func (s *AgentServiceTestSuite) TestRunAgentTask_Success() {
 	s.Require().NoError(err)
 	s.Equal("running", run.GetStatus())
 	s.Equal("session-123", run.GetSessionId())
+}
+
+func (s *AgentServiceTestSuite) TestRunAgentTask_UsesSystemGithubTokenFallback() {
+	svc := agent.NewAgentService(s.runner, s.ollamaRunner, s.repo, s.prOpener, "system-token", zap.NewNop())
+	req := agent.RunAgentTaskRequest{
+		Provider: "aider",
+		RepoURL:  "https://github.com/holmes89/firefly",
+		// GithubToken deliberately left empty.
+	}
+	s.runner.On("StartSession", mock.Anything, mock.MatchedBy(func(got agent.RunAgentTaskRequest) bool {
+		return got.GithubToken == "system-token"
+	})).Return("session-123", nil)
+	s.repo.On("Create", mock.Anything, mock.Anything).Return(nil)
+	s.runner.On("GetSessionStatus", mock.Anything, "session-123").Maybe().Return("terminated", "", nil)
+	s.repo.On("Get", mock.Anything, mock.Anything).Maybe().Return(&greysealv1.AgentRun{}, nil)
+	s.repo.On("Update", mock.Anything, mock.Anything, mock.Anything).Maybe().Return(nil)
+
+	_, err := svc.RunAgentTask(context.Background(), req)
+	s.Require().NoError(err)
+}
+
+func (s *AgentServiceTestSuite) TestRunAgentTask_RequestTokenTakesPriorityOverSystemFallback() {
+	svc := agent.NewAgentService(s.runner, s.ollamaRunner, s.repo, s.prOpener, "system-token", zap.NewNop())
+	req := agent.RunAgentTaskRequest{
+		Provider:    "aider",
+		RepoURL:     "https://github.com/holmes89/firefly",
+		GithubToken: "request-token",
+	}
+	s.runner.On("StartSession", mock.Anything, mock.MatchedBy(func(got agent.RunAgentTaskRequest) bool {
+		return got.GithubToken == "request-token"
+	})).Return("session-123", nil)
+	s.repo.On("Create", mock.Anything, mock.Anything).Return(nil)
+	s.runner.On("GetSessionStatus", mock.Anything, "session-123").Maybe().Return("terminated", "", nil)
+	s.repo.On("Get", mock.Anything, mock.Anything).Maybe().Return(&greysealv1.AgentRun{}, nil)
+	s.repo.On("Update", mock.Anything, mock.Anything, mock.Anything).Maybe().Return(nil)
+
+	_, err := svc.RunAgentTask(context.Background(), req)
+	s.Require().NoError(err)
+}
+
+func (s *AgentServiceTestSuite) TestRunAgentTask_PushBranchHint_SanitizedAndUsed() {
+	req := agent.RunAgentTaskRequest{
+		Provider:       "aider",
+		RepoURL:        "https://github.com/holmes89/firefly",
+		PushBranchHint: "FOX-7",
+	}
+	s.runner.On("StartSession", mock.Anything, mock.MatchedBy(func(got agent.RunAgentTaskRequest) bool {
+		return got.PushBranch == "agent/fox-7"
+	})).Return("session-123", nil)
+	s.repo.On("Create", mock.Anything, mock.Anything).Return(nil)
+	s.runner.On("GetSessionStatus", mock.Anything, "session-123").Maybe().Return("terminated", "", nil)
+	s.repo.On("Get", mock.Anything, mock.Anything).Maybe().Return(&greysealv1.AgentRun{}, nil)
+	s.repo.On("Update", mock.Anything, mock.Anything, mock.Anything).Maybe().Return(nil)
+
+	_, err := s.svc.RunAgentTask(context.Background(), req)
+	s.Require().NoError(err)
 }
 
 func (s *AgentServiceTestSuite) TestRunAgentTask_StartSessionError() {
