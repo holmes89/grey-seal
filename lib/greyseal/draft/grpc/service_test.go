@@ -71,6 +71,34 @@ func (s *DraftGRPCHandlerTestSuite) TestStreamsTokensThenFinalChunk() {
 	s.Equal([]string{"Owner"}, chunks[2].GetSpecs()[0].GetDependsOn())
 }
 
+func (s *DraftGRPCHandlerTestSuite) TestTicketsKindMapsTicketsOnFinalChunk() {
+	s.svc.On("Draft", mock.Anything,
+		draft.DraftRequest{Kind: draft.KindTickets, Title: "T"},
+		mock.Anything,
+	).Return(&draft.Result{
+		Tickets: []draft.Ticket{
+			{Title: "A", Body: "do a", AcceptanceCriteria: []string{"works"}, DependsOn: []string{"B"}},
+		},
+	}, nil)
+
+	stream, err := s.client.DraftDocument(context.Background(), connect.NewRequest(&services.DraftDocumentRequest{
+		Kind: services.DraftKind_DRAFT_KIND_TICKETS, Title: "T",
+	}))
+	s.Require().NoError(err)
+	var last *services.DraftDocumentChunk
+	for stream.Receive() {
+		last = stream.Msg()
+	}
+	s.Require().NoError(stream.Err())
+	s.True(last.GetDone())
+	s.Empty(last.GetBody())
+	s.Require().Len(last.GetTickets(), 1)
+	s.Equal("A", last.GetTickets()[0].GetTitle())
+	s.Equal("do a", last.GetTickets()[0].GetBody())
+	s.Equal([]string{"works"}, last.GetTickets()[0].GetAcceptanceCriteria())
+	s.Equal([]string{"B"}, last.GetTickets()[0].GetDependsOn())
+}
+
 func (s *DraftGRPCHandlerTestSuite) TestUnspecifiedKindIsInvalid() {
 	stream, err := s.client.DraftDocument(context.Background(), connect.NewRequest(&services.DraftDocumentRequest{Title: "T"}))
 	s.Require().NoError(err)

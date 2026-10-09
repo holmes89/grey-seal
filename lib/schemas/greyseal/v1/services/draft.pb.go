@@ -30,6 +30,10 @@ const (
 	// A .proto for one domain object (a design Spec), in the shape beaver's
 	// generator consumes. title is the Spec name; proto_package is required.
 	DraftKind_DRAFT_KIND_PROTO DraftKind = 3
+	// A set of implementation tickets for a design. title is the design's
+	// title; the final chunk's tickets field carries the parsed proposals
+	// instead of (in addition to) a single document body.
+	DraftKind_DRAFT_KIND_TICKETS DraftKind = 4
 )
 
 // Enum value maps for DraftKind.
@@ -39,12 +43,14 @@ var (
 		1: "DRAFT_KIND_DISCOVERY",
 		2: "DRAFT_KIND_DESIGN",
 		3: "DRAFT_KIND_PROTO",
+		4: "DRAFT_KIND_TICKETS",
 	}
 	DraftKind_value = map[string]int32{
 		"DRAFT_KIND_UNSPECIFIED": 0,
 		"DRAFT_KIND_DISCOVERY":   1,
 		"DRAFT_KIND_DESIGN":      2,
 		"DRAFT_KIND_PROTO":       3,
+		"DRAFT_KIND_TICKETS":     4,
 	}
 )
 
@@ -221,21 +227,94 @@ func (x *ProposedSpec) GetDependsOn() []string {
 	return nil
 }
 
+// ProposedTicket is one row from a DRAFT_KIND_TICKETS draft's ticket table —
+// the machine-readable input rabbit Tickets are created from.
+type ProposedTicket struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Title              string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
+	Body               string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
+	AcceptanceCriteria []string               `protobuf:"bytes,3,rep,name=acceptance_criteria,json=acceptanceCriteria,proto3" json:"acceptance_criteria,omitempty"`
+	// depends_on names other proposed tickets in the same draft.
+	DependsOn     []string `protobuf:"bytes,4,rep,name=depends_on,json=dependsOn,proto3" json:"depends_on,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProposedTicket) Reset() {
+	*x = ProposedTicket{}
+	mi := &file_schemas_greyseal_v1_services_draft_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProposedTicket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProposedTicket) ProtoMessage() {}
+
+func (x *ProposedTicket) ProtoReflect() protoreflect.Message {
+	mi := &file_schemas_greyseal_v1_services_draft_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProposedTicket.ProtoReflect.Descriptor instead.
+func (*ProposedTicket) Descriptor() ([]byte, []int) {
+	return file_schemas_greyseal_v1_services_draft_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ProposedTicket) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *ProposedTicket) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *ProposedTicket) GetAcceptanceCriteria() []string {
+	if x != nil {
+		return x.AcceptanceCriteria
+	}
+	return nil
+}
+
+func (x *ProposedTicket) GetDependsOn() []string {
+	if x != nil {
+		return x.DependsOn
+	}
+	return nil
+}
+
 type DraftDocumentChunk struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// token is the next piece of markdown; empty on the final message.
 	Token string `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
 	Done  bool   `protobuf:"varint,2,opt,name=done,proto3" json:"done,omitempty"`
-	// body is the complete draft, set on the final message only.
-	Body          string          `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
-	Specs         []*ProposedSpec `protobuf:"bytes,4,rep,name=specs,proto3" json:"specs,omitempty"`
+	// body is the complete draft, set on the final message only. Empty for
+	// DRAFT_KIND_TICKETS, which carries its result in tickets instead.
+	Body          string            `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
+	Specs         []*ProposedSpec   `protobuf:"bytes,4,rep,name=specs,proto3" json:"specs,omitempty"`
+	Tickets       []*ProposedTicket `protobuf:"bytes,5,rep,name=tickets,proto3" json:"tickets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DraftDocumentChunk) Reset() {
 	*x = DraftDocumentChunk{}
-	mi := &file_schemas_greyseal_v1_services_draft_proto_msgTypes[2]
+	mi := &file_schemas_greyseal_v1_services_draft_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -247,7 +326,7 @@ func (x *DraftDocumentChunk) String() string {
 func (*DraftDocumentChunk) ProtoMessage() {}
 
 func (x *DraftDocumentChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_schemas_greyseal_v1_services_draft_proto_msgTypes[2]
+	mi := &file_schemas_greyseal_v1_services_draft_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -260,7 +339,7 @@ func (x *DraftDocumentChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DraftDocumentChunk.ProtoReflect.Descriptor instead.
 func (*DraftDocumentChunk) Descriptor() ([]byte, []int) {
-	return file_schemas_greyseal_v1_services_draft_proto_rawDescGZIP(), []int{2}
+	return file_schemas_greyseal_v1_services_draft_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DraftDocumentChunk) GetToken() string {
@@ -291,6 +370,13 @@ func (x *DraftDocumentChunk) GetSpecs() []*ProposedSpec {
 	return nil
 }
 
+func (x *DraftDocumentChunk) GetTickets() []*ProposedTicket {
+	if x != nil {
+		return x.Tickets
+	}
+	return nil
+}
+
 var File_schemas_greyseal_v1_services_draft_proto protoreflect.FileDescriptor
 
 const file_schemas_greyseal_v1_services_draft_proto_rawDesc = "" +
@@ -306,17 +392,25 @@ const file_schemas_greyseal_v1_services_draft_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\toperation\x18\x02 \x01(\tR\toperation\x12\x1d\n" +
 	"\n" +
-	"depends_on\x18\x03 \x03(\tR\tdependsOn\"\x94\x01\n" +
+	"depends_on\x18\x03 \x03(\tR\tdependsOn\"\x8a\x01\n" +
+	"\x0eProposedTicket\x12\x14\n" +
+	"\x05title\x18\x01 \x01(\tR\x05title\x12\x12\n" +
+	"\x04body\x18\x02 \x01(\tR\x04body\x12/\n" +
+	"\x13acceptance_criteria\x18\x03 \x03(\tR\x12acceptanceCriteria\x12\x1d\n" +
+	"\n" +
+	"depends_on\x18\x04 \x03(\tR\tdependsOn\"\xdc\x01\n" +
 	"\x12DraftDocumentChunk\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12\x12\n" +
 	"\x04done\x18\x02 \x01(\bR\x04done\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\x12@\n" +
-	"\x05specs\x18\x04 \x03(\v2*.schemas.greyseal.services.v1.ProposedSpecR\x05specs*n\n" +
+	"\x05specs\x18\x04 \x03(\v2*.schemas.greyseal.services.v1.ProposedSpecR\x05specs\x12F\n" +
+	"\atickets\x18\x05 \x03(\v2,.schemas.greyseal.services.v1.ProposedTicketR\atickets*\x86\x01\n" +
 	"\tDraftKind\x12\x1a\n" +
 	"\x16DRAFT_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14DRAFT_KIND_DISCOVERY\x10\x01\x12\x15\n" +
 	"\x11DRAFT_KIND_DESIGN\x10\x02\x12\x14\n" +
-	"\x10DRAFT_KIND_PROTO\x10\x032\x89\x01\n" +
+	"\x10DRAFT_KIND_PROTO\x10\x03\x12\x16\n" +
+	"\x12DRAFT_KIND_TICKETS\x10\x042\x89\x01\n" +
 	"\fDraftService\x12y\n" +
 	"\rDraftDocument\x122.schemas.greyseal.services.v1.DraftDocumentRequest\x1a0.schemas.greyseal.services.v1.DraftDocumentChunk\"\x000\x01B\x8c\x02\n" +
 	" com.schemas.greyseal.services.v1B\n" +
@@ -335,23 +429,25 @@ func file_schemas_greyseal_v1_services_draft_proto_rawDescGZIP() []byte {
 }
 
 var file_schemas_greyseal_v1_services_draft_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_schemas_greyseal_v1_services_draft_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_schemas_greyseal_v1_services_draft_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_schemas_greyseal_v1_services_draft_proto_goTypes = []any{
 	(DraftKind)(0),               // 0: schemas.greyseal.services.v1.DraftKind
 	(*DraftDocumentRequest)(nil), // 1: schemas.greyseal.services.v1.DraftDocumentRequest
 	(*ProposedSpec)(nil),         // 2: schemas.greyseal.services.v1.ProposedSpec
-	(*DraftDocumentChunk)(nil),   // 3: schemas.greyseal.services.v1.DraftDocumentChunk
+	(*ProposedTicket)(nil),       // 3: schemas.greyseal.services.v1.ProposedTicket
+	(*DraftDocumentChunk)(nil),   // 4: schemas.greyseal.services.v1.DraftDocumentChunk
 }
 var file_schemas_greyseal_v1_services_draft_proto_depIdxs = []int32{
 	0, // 0: schemas.greyseal.services.v1.DraftDocumentRequest.kind:type_name -> schemas.greyseal.services.v1.DraftKind
 	2, // 1: schemas.greyseal.services.v1.DraftDocumentChunk.specs:type_name -> schemas.greyseal.services.v1.ProposedSpec
-	1, // 2: schemas.greyseal.services.v1.DraftService.DraftDocument:input_type -> schemas.greyseal.services.v1.DraftDocumentRequest
-	3, // 3: schemas.greyseal.services.v1.DraftService.DraftDocument:output_type -> schemas.greyseal.services.v1.DraftDocumentChunk
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 2: schemas.greyseal.services.v1.DraftDocumentChunk.tickets:type_name -> schemas.greyseal.services.v1.ProposedTicket
+	1, // 3: schemas.greyseal.services.v1.DraftService.DraftDocument:input_type -> schemas.greyseal.services.v1.DraftDocumentRequest
+	4, // 4: schemas.greyseal.services.v1.DraftService.DraftDocument:output_type -> schemas.greyseal.services.v1.DraftDocumentChunk
+	4, // [4:5] is the sub-list for method output_type
+	3, // [3:4] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_schemas_greyseal_v1_services_draft_proto_init() }
@@ -365,7 +461,7 @@ func file_schemas_greyseal_v1_services_draft_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_schemas_greyseal_v1_services_draft_proto_rawDesc), len(file_schemas_greyseal_v1_services_draft_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -26,14 +26,16 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// DraftService writes first drafts of planning documents — discovery docs
-// and designs — in the house templates, from source material the caller
-// supplies. It never stores anything: the caller reviews the draft and saves
-// it to the owning service (narwhal, rabbit).
+// DraftService writes first drafts of planning documents — discovery docs,
+// designs, proto specs and implementation tickets — in the house templates,
+// from source material the caller supplies. It never stores anything: the
+// caller reviews the draft and saves it to the owning service (narwhal,
+// rabbit).
 type DraftServiceClient interface {
 	// DraftDocument streams the draft's markdown as it is generated. The final
 	// message has done=true and carries the full body, plus proposed specs
-	// parsed from a design's "Domain objects" section.
+	// parsed from a design's "Domain objects" section, or proposed tickets
+	// parsed from a DRAFT_KIND_TICKETS draft's ticket table.
 	DraftDocument(ctx context.Context, in *DraftDocumentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DraftDocumentChunk], error)
 }
 
@@ -68,14 +70,16 @@ type DraftService_DraftDocumentClient = grpc.ServerStreamingClient[DraftDocument
 // All implementations must embed UnimplementedDraftServiceServer
 // for forward compatibility.
 //
-// DraftService writes first drafts of planning documents — discovery docs
-// and designs — in the house templates, from source material the caller
-// supplies. It never stores anything: the caller reviews the draft and saves
-// it to the owning service (narwhal, rabbit).
+// DraftService writes first drafts of planning documents — discovery docs,
+// designs, proto specs and implementation tickets — in the house templates,
+// from source material the caller supplies. It never stores anything: the
+// caller reviews the draft and saves it to the owning service (narwhal,
+// rabbit).
 type DraftServiceServer interface {
 	// DraftDocument streams the draft's markdown as it is generated. The final
 	// message has done=true and carries the full body, plus proposed specs
-	// parsed from a design's "Domain objects" section.
+	// parsed from a design's "Domain objects" section, or proposed tickets
+	// parsed from a DRAFT_KIND_TICKETS draft's ticket table.
 	DraftDocument(*DraftDocumentRequest, grpc.ServerStreamingServer[DraftDocumentChunk]) error
 	mustEmbedUnimplementedDraftServiceServer()
 }

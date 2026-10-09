@@ -36,8 +36,10 @@ func (s *draftService) Draft(ctx context.Context, req DraftRequest, emit func(to
 		if !protoMessageRe.MatchString(req.Title) {
 			return nil, fmt.Errorf("proto drafts need the domain object's PascalCase name as the title, got %q", req.Title)
 		}
+	case KindTickets:
+		system = ticketsRules
 	default:
-		return nil, fmt.Errorf("draft kind must be discovery, design or proto")
+		return nil, fmt.Errorf("draft kind must be discovery, design, proto or tickets")
 	}
 	if strings.TrimSpace(req.Title) == "" && strings.TrimSpace(req.Source) == "" {
 		return nil, fmt.Errorf("a title or source material is required")
@@ -57,6 +59,10 @@ func (s *draftService) Draft(ctx context.Context, req DraftRequest, emit func(to
 	res := &Result{Body: body}
 	if req.Kind == KindDesign {
 		res.Specs = ParseDomainObjects(body)
+	}
+	if req.Kind == KindTickets {
+		res.Tickets = ParseProposedTickets(body)
+		res.Body = ""
 	}
 	return res, nil
 }
@@ -187,4 +193,65 @@ func ParseDomainObjects(body string) []Spec {
 		specs[i].DependsOn = deps
 	}
 	return specs
+}
+
+// ParseProposedTickets reads a KindTickets draft's markdown table into
+// tickets. Rows with no title are skipped; depends_on is resolved only
+// against titles seen in the same table — the table is model output, so it
+// is read leniently and never trusted to be well formed.
+func ParseProposedTickets(body string) []Ticket {
+	var rows [][]string
+	for _, line := range strings.Split(body, "\n") {
+		t := strings.TrimSpace(line)
+		if !strings.HasPrefix(t, "|") {
+			continue
+		}
+		cells := strings.Split(strings.Trim(t, "|"), "|")
+		for i := range cells {
+			cells[i] = strings.TrimSpace(cells[i])
+		}
+		if len(cells) < 1 || strings.EqualFold(cells[0], "title") || strings.Trim(cells[0], "-: ") == "" {
+			continue // header, separator, or empty row
+		}
+		rows = append(rows, cells)
+	}
+
+	var tickets []Ticket
+	titles := map[string]bool{}
+	for _, cells := range rows {
+		title := strings.Trim(cells[0], "*` ")
+		if title == "" || titles[title] {
+			continue
+		}
+		titles[title] = true
+		tk := Ticket{Title: title}
+		if len(cells) > 1 {
+			tk.Body = strings.Trim(cells[1], "*` ")
+		}
+		if len(cells) > 2 {
+			for _, ac := range strings.Split(cells[2], ";") {
+				if ac = strings.Trim(ac, "*` "); ac != "" {
+					tk.AcceptanceCriteria = append(tk.AcceptanceCriteria, ac)
+				}
+			}
+		}
+		if len(cells) > 3 {
+			for _, dep := range strings.Split(cells[3], ",") {
+				if dep = strings.Trim(dep, "*` "); dep != "" && dep != "-" && !strings.EqualFold(dep, "none") {
+					tk.DependsOn = append(tk.DependsOn, dep)
+				}
+			}
+		}
+		tickets = append(tickets, tk)
+	}
+	for i := range tickets {
+		var deps []string
+		for _, d := range tickets[i].DependsOn {
+			if titles[d] && d != tickets[i].Title {
+				deps = append(deps, d)
+			}
+		}
+		tickets[i].DependsOn = deps
+	}
+	return tickets
 }

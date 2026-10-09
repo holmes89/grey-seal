@@ -31,6 +31,8 @@ func (h *DraftHandler) DraftDocument(ctx context.Context, req *connect.Request[s
 		kind = entity.KindDesign
 	case services.DraftKind_DRAFT_KIND_PROTO:
 		kind = entity.KindProto
+	case services.DraftKind_DRAFT_KIND_TICKETS:
+		kind = entity.KindTickets
 	default:
 		return connect.NewError(connect.CodeInvalidArgument, errKind)
 	}
@@ -50,7 +52,16 @@ func (h *DraftHandler) DraftDocument(ctx context.Context, req *connect.Request[s
 	for _, sp := range res.Specs {
 		specs = append(specs, &services.ProposedSpec{Name: sp.Name, Operation: sp.Operation, DependsOn: sp.DependsOn})
 	}
-	return stream.Send(&services.DraftDocumentChunk{Done: true, Body: res.Body, Specs: specs})
+	tickets := make([]*services.ProposedTicket, 0, len(res.Tickets))
+	for _, tk := range res.Tickets {
+		tickets = append(tickets, &services.ProposedTicket{
+			Title:              tk.Title,
+			Body:               tk.Body,
+			AcceptanceCriteria: tk.AcceptanceCriteria,
+			DependsOn:          tk.DependsOn,
+		})
+	}
+	return stream.Send(&services.DraftDocumentChunk{Done: true, Body: res.Body, Specs: specs, Tickets: tickets})
 }
 
-var errKind = errors.New("kind must be DRAFT_KIND_DISCOVERY, DRAFT_KIND_DESIGN or DRAFT_KIND_PROTO")
+var errKind = errors.New("kind must be DRAFT_KIND_DISCOVERY, DRAFT_KIND_DESIGN, DRAFT_KIND_PROTO or DRAFT_KIND_TICKETS")

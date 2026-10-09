@@ -60,6 +60,23 @@ Rules:
 - Use only facts from the source material. Record anything unknown as an open question; never invent names, numbers or dates.
 - Be concise: short paragraphs and bullets, no filler.`
 
+const ticketsTemplate = `| Title | Body | Acceptance criteria | Depends on |
+| --- | --- | --- | --- |`
+
+const ticketsRules = `You write implementation tickets for a software design, for an engineering team.
+Output only a markdown table, following this template's header exactly, one row per ticket:
+
+` + ticketsTemplate + `
+
+Rules:
+- Each ticket must be independently implementable by one engineer without needing to read the others first — restate whatever context from the design it needs.
+- Body is a short paragraph: what to build and where it fits, not a restatement of the title.
+- Acceptance criteria is 2-5 concrete, testable statements, separated by semicolons. Write what a reviewer can check (e.g. "POST /things returns 201 with the new uuid"), never vague statements like "works correctly".
+- Depends on lists other tickets' Title values from the same table, comma-separated, or is empty. A ticket should only depend on another when it genuinely cannot be implemented or reviewed first.
+- Prefer more, smaller tickets over fewer, large ones — each should be reviewable as a single pull request.
+- Cover the design's approach, contracts and domain objects; do not invent requirements the design does not support.
+- Use only facts from the source material and the current draft, if given.`
+
 // protoRules keeps drafted protos inside what beaver's generator accepts:
 // one top-level message per file (beaver requires a string uuid on every
 // top-level message), all files sharing the service's package, scalar,

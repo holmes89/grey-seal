@@ -11,6 +11,10 @@ const (
 	KindDesign
 	// KindProto drafts one domain object's .proto (Title is the Spec name).
 	KindProto
+	// KindTickets drafts a set of implementation tickets for a design
+	// (Title is the design's title). The result's Tickets field carries the
+	// parsed proposals; Body is unused.
+	KindTickets
 )
 
 // DraftService writes first drafts of planning documents in the house
@@ -48,6 +52,9 @@ type Result struct {
 	// Specs are the domain objects parsed from a design's "Domain objects"
 	// table. Always empty for discovery docs.
 	Specs []Spec
+	// Tickets are the proposed tickets parsed from a KindTickets draft's
+	// ticket table. Always empty for every other kind.
+	Tickets []Ticket
 }
 
 // Spec is one proposed domain object.
@@ -55,4 +62,12 @@ type Spec struct {
 	Name      string
 	Operation string // create | modify | deprecate
 	DependsOn []string
+}
+
+// Ticket is one proposed implementation ticket.
+type Ticket struct {
+	Title              string
+	Body               string
+	AcceptanceCriteria []string
+	DependsOn          []string
 }
