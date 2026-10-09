@@ -1,0 +1,11 @@
+# Ids only; addresses and credentials stay in ~/.config/jh/config.yaml.
+# rabbit: which project this repo's designs, specs and tickets belong to.
+version: 1
+portal: https://joel.holmes.haus
+project:
+  uuid: 9f94971e-2224-5948-bcd4-eed08b50d911
+  name: grey-seal
+designs:
+  dir: docs/designs   # design docs link to rabbit designs by design_uuid
+specs:
+  dir: docs/specs
