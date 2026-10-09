@@ -54,6 +54,7 @@
     - [DraftDocumentChunk](#schemas-greyseal-services-v1-DraftDocumentChunk)
     - [DraftDocumentRequest](#schemas-greyseal-services-v1-DraftDocumentRequest)
     - [ProposedSpec](#schemas-greyseal-services-v1-ProposedSpec)
+    - [ProposedTicket](#schemas-greyseal-services-v1-ProposedTicket)
   
     - [DraftKind](#schemas-greyseal-services-v1-DraftKind)
   
@@ -389,6 +390,7 @@ AgentRunEvent is one relayed event from a running agent session.
 | task_description | [string](#string) |  | task_description is what the agent should do. |
 | rubric | [string](#string) |  | rubric is the grading criteria for the provider&#39;s outcome-graded loop, e.g. &#34;go build ./... succeeds, go test ./... passes, no TODO(agent) markers remain&#34;. Unused for &#34;ollama:&#34;. |
 | project_uuid | [string](#string) |  | project_uuid pins the Rabbit project for an &#34;ollama:&lt;model&gt;&#34; design run: when set, the runner creates every draft ticket in this project and the model is not asked to choose one. Empty leaves the model to match a project by name from the design text. Unused for &#34;aider&#34;. |
+| push_branch | [string](#string) |  | push_branch is an optional hint for the branch the run pushes finished work to — sanitized and prefixed with &#34;agent/&#34; server-side (e.g. a ticket key &#34;FOX-7&#34; becomes &#34;agent/fox-7&#34;). A random &#34;agent/&lt;uuid&gt;&#34; is used when empty. Unused for &#34;ollama:&#34;. |
 
 
 
@@ -709,8 +711,9 @@ resource references and uuid set.
 | ----- | ---- | ----- | ----------- |
 | token | [string](#string) |  | token is the next piece of markdown; empty on the final message. |
 | done | [bool](#bool) |  |  |
-| body | [string](#string) |  | body is the complete draft, set on the final message only. |
+| body | [string](#string) |  | body is the complete draft, set on the final message only. Empty for DRAFT_KIND_TICKETS, which carries its result in tickets instead. |
 | specs | [ProposedSpec](#schemas-greyseal-services-v1-ProposedSpec) | repeated |  |
+| tickets | [ProposedTicket](#schemas-greyseal-services-v1-ProposedTicket) | repeated |  |
 
 
 
@@ -729,6 +732,7 @@ resource references and uuid set.
 | title | [string](#string) |  |  |
 | source | [string](#string) |  | source is the material to draft from, as markdown: the originating request, the parent discovery doc, the product&#39;s system doc. |
 | current | [string](#string) |  | current is the draft&#39;s existing body, if any, to improve on rather than start over. |
+| proto_package | [string](#string) |  | proto_package is the proto package every file of the service shares (DRAFT_KIND_PROTO only), e.g. &#34;shipping&#34;. |
 
 
 
@@ -752,6 +756,25 @@ table — the machine-readable input rabbit Specs are created from.
 
 
 
+
+<a name="schemas-greyseal-services-v1-ProposedTicket"></a>
+
+### ProposedTicket
+ProposedTicket is one row from a DRAFT_KIND_TICKETS draft&#39;s ticket table —
+the machine-readable input rabbit Tickets are created from.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| title | [string](#string) |  |  |
+| body | [string](#string) |  |  |
+| acceptance_criteria | [string](#string) | repeated |  |
+| depends_on | [string](#string) | repeated | depends_on names other proposed tickets in the same draft. |
+
+
+
+
+
  
 
 
@@ -765,6 +788,8 @@ table — the machine-readable input rabbit Specs are created from.
 | DRAFT_KIND_UNSPECIFIED | 0 |  |
 | DRAFT_KIND_DISCOVERY | 1 |  |
 | DRAFT_KIND_DESIGN | 2 |  |
+| DRAFT_KIND_PROTO | 3 | A .proto for one domain object (a design Spec), in the shape beaver&#39;s generator consumes. title is the Spec name; proto_package is required. |
+| DRAFT_KIND_TICKETS | 4 | A set of implementation tickets for a design. title is the design&#39;s title; the final chunk&#39;s tickets field carries the parsed proposals instead of (in addition to) a single document body. |
 
 
  
@@ -775,14 +800,15 @@ table — the machine-readable input rabbit Specs are created from.
 <a name="schemas-greyseal-services-v1-DraftService"></a>
 
 ### DraftService
-DraftService writes first drafts of planning documents — discovery docs
-and designs — in the house templates, from source material the caller
-supplies. It never stores anything: the caller reviews the draft and saves
-it to the owning service (narwhal, rabbit).
+DraftService writes first drafts of planning documents — discovery docs,
+designs, proto specs and implementation tickets — in the house templates,
+from source material the caller supplies. It never stores anything: the
+caller reviews the draft and saves it to the owning service (narwhal,
+rabbit).
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| DraftDocument | [DraftDocumentRequest](#schemas-greyseal-services-v1-DraftDocumentRequest) | [DraftDocumentChunk](#schemas-greyseal-services-v1-DraftDocumentChunk) stream | DraftDocument streams the draft&#39;s markdown as it is generated. The final message has done=true and carries the full body, plus proposed specs parsed from a design&#39;s &#34;Domain objects&#34; section. |
+| DraftDocument | [DraftDocumentRequest](#schemas-greyseal-services-v1-DraftDocumentRequest) | [DraftDocumentChunk](#schemas-greyseal-services-v1-DraftDocumentChunk) stream | DraftDocument streams the draft&#39;s markdown as it is generated. The final message has done=true and carries the full body, plus proposed specs parsed from a design&#39;s &#34;Domain objects&#34; section, or proposed tickets parsed from a DRAFT_KIND_TICKETS draft&#39;s ticket table. |
 
  
 

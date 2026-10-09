@@ -2,14 +2,16 @@ syntax = "proto3";
 
 package schemas.greyseal.services.v1;
 
-// DraftService writes first drafts of planning documents — discovery docs
-// and designs — in the house templates, from source material the caller
-// supplies. It never stores anything: the caller reviews the draft and saves
-// it to the owning service (narwhal, rabbit).
+// DraftService writes first drafts of planning documents — discovery docs,
+// designs, proto specs and implementation tickets — in the house templates,
+// from source material the caller supplies. It never stores anything: the
+// caller reviews the draft and saves it to the owning service (narwhal,
+// rabbit).
 service DraftService {
   // DraftDocument streams the draft's markdown as it is generated. The final
   // message has done=true and carries the full body, plus proposed specs
-  // parsed from a design's "Domain objects" section.
+  // parsed from a design's "Domain objects" section, or proposed tickets
+  // parsed from a DRAFT_KIND_TICKETS draft's ticket table.
   rpc DraftDocument(DraftDocumentRequest) returns (stream DraftDocumentChunk) {}
 }
 
@@ -20,6 +22,10 @@ enum DraftKind {
   // A .proto for one domain object (a design Spec), in the shape beaver's
   // generator consumes. title is the Spec name; proto_package is required.
   DRAFT_KIND_PROTO       = 3;
+  // A set of implementation tickets for a design. title is the design's
+  // title; the final chunk's tickets field carries the parsed proposals
+  // instead of (in addition to) a single document body.
+  DRAFT_KIND_TICKETS     = 4;
 }
 
 message DraftDocumentRequest {
@@ -46,11 +52,23 @@ message ProposedSpec {
   repeated string depends_on = 3;
 }
 
+// ProposedTicket is one row from a DRAFT_KIND_TICKETS draft's ticket table —
+// the machine-readable input rabbit Tickets are created from.
+message ProposedTicket {
+  string title = 1;
+  string body = 2;
+  repeated string acceptance_criteria = 3;
+  // depends_on names other proposed tickets in the same draft.
+  repeated string depends_on = 4;
+}
+
 message DraftDocumentChunk {
   // token is the next piece of markdown; empty on the final message.
   string token = 1;
   bool done = 2;
-  // body is the complete draft, set on the final message only.
+  // body is the complete draft, set on the final message only. Empty for
+  // DRAFT_KIND_TICKETS, which carries its result in tickets instead.
   string body = 3;
   repeated ProposedSpec specs = 4;
+  repeated ProposedTicket tickets = 5;
 }

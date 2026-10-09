@@ -177,6 +177,50 @@ func (s *DraftServiceSuite) TestProto_AddsMissingTimestampImport() {
 	s.Equal("syntax = \"proto3\";\npackage notes;\n\nimport \"google/protobuf/timestamp.proto\";\n\nmessage Revision {\n  string uuid = 1;\n  google.protobuf.Timestamp created_at = 2;\n}\n", res.Body)
 }
 
+const ticketsBody = `| Title | Body | Acceptance criteria | Depends on |
+| --- | --- | --- | --- |
+| Add NoteDraft table | Create the migration and store. | goose migration applies; Store.Insert round-trips a note | |
+| Wire sync queue | Enqueue drafts for sync on save. | SyncQueue row created on save; retried on failure | Add NoteDraft table |`
+
+func (s *DraftServiceSuite) TestTickets_ParsesTicketsFromTable() {
+	s.gen.On("Generate", mock.Anything,
+		mock.MatchedBy(func(sys string) bool {
+			return strings.Contains(sys, "implementation tickets") && strings.Contains(sys, "| Title | Body |")
+		}),
+		mock.MatchedBy(func(p string) bool { return strings.Contains(p, "Title: Offline notes") }),
+		mock.Anything,
+	).Return(ticketsBody, nil)
+
+	res, err := s.svc.Draft(context.Background(), draft.DraftRequest{Kind: draft.KindTickets, Title: "Offline notes"}, nil)
+
+	s.Require().NoError(err)
+	s.Empty(res.Body, "tickets carry their result in Tickets, not Body")
+	s.Equal([]draft.Ticket{
+		{
+			Title:              "Add NoteDraft table",
+			Body:               "Create the migration and store.",
+			AcceptanceCriteria: []string{"goose migration applies", "Store.Insert round-trips a note"},
+		},
+		{
+			Title:              "Wire sync queue",
+			Body:               "Enqueue drafts for sync on save.",
+			AcceptanceCriteria: []string{"SyncQueue row created on save", "retried on failure"},
+			DependsOn:          []string{"Add NoteDraft table"},
+		},
+	}, res.Tickets)
+}
+
+func (s *parseSuite) TestParseProposedTickets_SkipsMalformedRowsAndUnknownDeps() {
+	body := "| Title | Body | Acceptance criteria | Depends on |\n" +
+		"| --- | --- | --- | --- |\n" +
+		"| A | do a | works | Ghost |\n" +
+		"| A | dup, skipped | | |\n" +
+		"| | no title | | |\n"
+	s.Equal([]draft.Ticket{
+		{Title: "A", Body: "do a", AcceptanceCriteria: []string{"works"}},
+	}, draft.ParseProposedTickets(body))
+}
+
 func (s *DraftServiceSuite) TestProto_KeepsExistingImportAndPlainProtos() {
 	withImport := "syntax = \"proto3\";\npackage notes;\n\nimport \"google/protobuf/timestamp.proto\";\n\nmessage R {\n  string uuid = 1;\n  google.protobuf.Timestamp at = 2;\n}\n"
 	plain := "syntax = \"proto3\";\npackage notes;\n\nmessage R {\n  string uuid = 1;\n}\n"
