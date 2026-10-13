@@ -180,6 +180,58 @@ func (s *ConversationServiceTestSuite) TestChat_DraftTypeDraftsFromEverythingSin
 	s.Equal("design", msg.GetDraftKind())
 }
 
+func (s *ConversationServiceTestSuite) TestChat_DraftWithOpenQuestionsSendsAFollowUpNudge() {
+	conv := s.draftingConv("design")
+	s.convRepo.On("Get", mock.Anything, "conv-d").Return(conv, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.msgRepo.On("ListByConversation", mock.Anything, "conv-d").Return([]*v1.Message{
+		{Uuid: "p", Role: v1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "What would you like to design?"},
+		{Uuid: "u1", Role: v1.MessageRole_MESSAGE_ROLE_USER, Content: "A shipping tracker"},
+	}, nil)
+	draftBody := "# Design: Tracker\n\n## Open questions\n" +
+		"| # | Question | Leaning |\n| --- | --- | --- |\n" +
+		"| 1 | Who owns shipment status updates? | Neutral |\n"
+	s.drafter.On("Draft", mock.Anything, mock.Anything, mock.Anything).Return(&draft.Result{Body: draftBody}, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.DraftKind == "design" && m.Content == draftBody
+	})).Return(nil).Once()
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.DraftKind == "" && m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT &&
+			strings.Contains(m.Content, "Who owns shipment status updates?") &&
+			strings.Contains(m.Content, "Reply with answers to refine the draft")
+	})).Return(nil).Once()
+
+	msg, err := s.svc.Chat(context.Background(), "conv-d", "A shipping tracker", func(string) error { return nil })
+	s.Require().NoError(err)
+	s.Equal("design", msg.GetDraftKind())
+}
+
+func (s *ConversationServiceTestSuite) TestChat_DraftWithoutOpenQuestionsSendsNoNudge() {
+	conv := s.draftingConv("tickets")
+	s.convRepo.On("Get", mock.Anything, "conv-d").Return(conv, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.msgRepo.On("ListByConversation", mock.Anything, "conv-d").Return([]*v1.Message{
+		{Uuid: "u1", Role: v1.MessageRole_MESSAGE_ROLE_USER, Content: "Build the API"},
+	}, nil)
+	s.drafter.On("Draft", mock.Anything, mock.Anything, mock.Anything).Return(&draft.Result{Tickets: []draft.Ticket{
+		{Title: "Add endpoint", Body: "Do it", AcceptanceCriteria: []string{"returns 201"}},
+	}}, nil)
+	// Only one Create call is expected for the assistant side (the draft
+	// itself) — if a nudge were sent too, this mock would see a second,
+	// unmatched Create call and the test would fail via mockery's strict
+	// unexpected-call panic.
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.DraftKind == "tickets"
+	})).Return(nil).Once()
+
+	_, err := s.svc.Chat(context.Background(), "conv-d", "Build the API", func(string) error { return nil })
+	s.Require().NoError(err)
+}
+
 func (s *ConversationServiceTestSuite) TestChat_DraftTypeFollowUpRefinesLatestDraft() {
 	s.convRepo.On("Get", mock.Anything, "conv-d").Return(s.draftingConv("discovery"), nil)
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
