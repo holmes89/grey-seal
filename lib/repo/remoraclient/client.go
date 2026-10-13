@@ -25,13 +25,17 @@ func New(tools agent.ToolProvider) *Client {
 	return &Client{tools: tools}
 }
 
-func (c *Client) CreateDesign(ctx context.Context, projectUUID, title, description, body string) (string, error) {
-	return c.call(ctx, "create_design", map[string]any{
+func (c *Client) CreateDesign(ctx context.Context, projectUUID, title, description, body, narwhalDocUUID string) (string, error) {
+	args := map[string]any{
 		"project_uuid": projectUUID,
 		"title":        title,
 		"description":  description,
 		"body":         body,
-	})
+	}
+	if narwhalDocUUID != "" {
+		args["narwhal_doc_uuid"] = narwhalDocUUID
+	}
+	return c.call(ctx, "create_design", args)
 }
 
 func (c *Client) CreateDiscoveryDoc(ctx context.Context, productUUID, title, slug, description, body string) (string, error) {

@@ -164,6 +164,14 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		return nil, fmt.Errorf("failed to load conversation: %w", err)
 	}
 
+	// A pending chain offer (e.g. "move onto design?") takes priority over
+	// everything else: accepting transitions the work type and drafts
+	// immediately; declining (or saying something unrelated) clears the
+	// offer and falls through to ordinary handling below.
+	if chained, handled, err := srv.resolveChainOffer(ctx, conv, content, stream); handled {
+		return chained, err
+	}
+
 	// Still waiting for the user to pick a work type: answer without the LLM.
 	if conv.WorkType == worktype.Pending && srv.workTypes != nil {
 		return srv.selectWorkType(ctx, conv, content, stream)

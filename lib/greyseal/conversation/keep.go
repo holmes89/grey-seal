@@ -22,7 +22,7 @@ var (
 // RemoraWriter writes kept drafts to Remora. Each method returns the new
 // entity's uuid.
 type RemoraWriter interface {
-	CreateDesign(ctx context.Context, projectUUID, title, description, body string) (string, error)
+	CreateDesign(ctx context.Context, projectUUID, title, description, body, narwhalDocUUID string) (string, error)
 	CreateDiscoveryDoc(ctx context.Context, productUUID, title, slug, description, body string) (string, error)
 	CreateTicket(ctx context.Context, projectUUID, designUUID, title, body string) (string, error)
 }
@@ -37,6 +37,9 @@ type KeepDraftInput struct {
 	ProductUUID string
 	// DesignUUID optionally links kept tickets to a design.
 	DesignUUID string
+	// NarwhalDocUUID optionally links a kept design back to the discovery
+	// doc it was drafted from.
+	NarwhalDocUUID string
 }
 
 var (
@@ -70,7 +73,7 @@ func (srv *conversationService) KeepDraft(ctx context.Context, in KeepDraftInput
 		if in.ProjectUUID == "" {
 			return nil, fmt.Errorf("%w: project_uuid is required to keep a design", ErrKeepInvalid)
 		}
-		id, err := srv.remora.CreateDesign(ctx, in.ProjectUUID, title, "", msg.Content)
+		id, err := srv.remora.CreateDesign(ctx, in.ProjectUUID, title, "", msg.Content, in.NarwhalDocUUID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write design to remora: %w", err)
 		}
@@ -113,6 +116,9 @@ func (srv *conversationService) KeepDraft(ctx context.Context, in KeepDraftInput
 		return nil, fmt.Errorf("draft written to remora (%s) but recording it failed: %w", ref, err)
 	}
 	srv.logger.Info("draft kept", zap.String("message_uuid", msg.Uuid), zap.String("kept_ref", ref))
+
+	srv.offerChain(ctx, conv, msg.DraftKind, msg.Content)
+
 	return msg, nil
 }
 

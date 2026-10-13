@@ -2,6 +2,7 @@ id: discovery
 label: Discovery
 prompt: What would you like to explore?
 draft_kind: discovery
+next_work_type: design
 template: |-
     # Feature Discovery: <Name> - <One-line description>
 

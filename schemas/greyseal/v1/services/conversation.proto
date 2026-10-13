@@ -100,6 +100,9 @@ message KeepDraftRequest {
   string product_uuid = 4;
   // design_uuid optionally links kept tickets to a design.
   string design_uuid = 5;
+  // narwhal_doc_uuid optionally links a kept design back to the discovery
+  // doc it was drafted from.
+  string narwhal_doc_uuid = 6;
 }
 
 message KeepDraftResponse {

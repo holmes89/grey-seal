@@ -38,6 +38,15 @@ func (s *RegistrySuite) TestDefaults() {
 	s.True(ok)
 	s.Contains(design.System, "# Design: <Name>", "template placeholder is expanded")
 	s.NotContains(design.System, "{{template}}")
+	s.Equal("tickets", design.NextWorkType)
+
+	discovery, ok := reg.ByDraftKind("discovery")
+	s.True(ok)
+	s.Equal("design", discovery.NextWorkType)
+
+	tickets, ok := reg.ByDraftKind("tickets")
+	s.True(ok)
+	s.Empty(tickets.NextWorkType, "tickets is a terminal step")
 }
 
 func (s *RegistrySuite) TestMatch() {
