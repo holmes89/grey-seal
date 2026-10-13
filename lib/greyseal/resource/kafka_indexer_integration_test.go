@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/holmes89/grey-seal/lib/greyseal/resource"
+	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
+	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1"
 	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kfake"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
-	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1"
 	"google.golang.org/protobuf/proto"
 )
 

@@ -23,6 +23,7 @@ import (
 	resourcegrpc "github.com/holmes89/grey-seal/lib/greyseal/resource/grpc"
 	rolesvc "github.com/holmes89/grey-seal/lib/greyseal/role"
 	rolegrpc "github.com/holmes89/grey-seal/lib/greyseal/role/grpc"
+	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/holmes89/grey-seal/lib/repo/aiderrunner"
 	"github.com/holmes89/grey-seal/lib/repo/cache"
@@ -89,6 +90,13 @@ func main() {
 	)
 
 	// Role service
+	// Work types (design, discovery, ...) come from embedded defaults plus
+	// any yaml files in WORKTYPES_DIR.
+	workTypes, err := worktype.Load(os.Getenv("WORKTYPES_DIR"))
+	if err != nil {
+		logger.Fatal("failed to load work types", zap.Error(err))
+	}
+
 	roleRepo := &repo.RoleRepo{Conn: store}
 	roleSvc := rolesvc.NewRoleService(roleRepo, logger)
 	rolePath, roleHandler := servicesv1connect.NewRoleServiceHandler(rolegrpc.NewRoleHandler(roleSvc))
@@ -210,7 +218,7 @@ func main() {
 	if draftModel == "" {
 		draftModel = "qwen3:8b"
 	}
-	draftSvc := draftsvc.NewDraftService(ollama.NewDraftLLM(os.Getenv("OLLAMA_HOST"), draftModel), logger)
+	draftSvc := draftsvc.NewDraftService(ollama.NewDraftLLM(os.Getenv("OLLAMA_HOST"), draftModel), workTypes, logger)
 	draftPath, draftHandler := servicesv1connect.NewDraftServiceHandler(draftgrpc.NewDraftHandler(draftSvc))
 	logger.Info("registering draft service route", zap.String("path", draftPath), zap.String("model", draftModel))
 	srv.Handle(draftPath, draftHandler)

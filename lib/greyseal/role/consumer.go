@@ -1,6 +1,7 @@
 //go:build ignore
 
 package role
+
 import (
 	"context"
 	"log"
@@ -42,11 +43,10 @@ func (c *RoleConsumer) run() {
 	for i := range c.consumer.Read() {
 
 		role := &entitiesv1.Role{
-			Uuid: uuid.New().String(),
-			Name: i.Name,
+			Uuid:         uuid.New().String(),
+			Name:         i.Name,
 			SystemPrompt: i.SystemPrompt,
-			CreatedAt: i.CreatedAt,
-			
+			CreatedAt:    i.CreatedAt,
 		}
 
 		_, err := c.roleservice.Create(context.Background(), &servicesv1.CreateRoleRequest{
@@ -59,4 +59,3 @@ func (c *RoleConsumer) run() {
 		log.Printf("role %s was imported\n", i.Uuid)
 	}
 }
-

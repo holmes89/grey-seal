@@ -7,39 +7,49 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
+
+	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
 )
 
 var _ DraftService = (*draftService)(nil)
 
 type draftService struct {
 	gen    Generator
+	types  worktype.Registry
 	logger *zap.Logger
 }
 
-// NewDraftService returns a DraftService that writes with gen.
-func NewDraftService(gen Generator, logger *zap.Logger) DraftService {
-	return &draftService{gen: gen, logger: logger}
+// NewDraftService returns a DraftService that writes with gen, taking each
+// kind's system prompt and template from the work-type registry.
+func NewDraftService(gen Generator, types worktype.Registry, logger *zap.Logger) DraftService {
+	return &draftService{gen: gen, types: types, logger: logger}
+}
+
+// draftKindNames maps a Kind to the draft_kind used in work-type yaml.
+var draftKindNames = map[Kind]string{
+	KindDiscovery: "discovery",
+	KindDesign:    "design",
+	KindProto:     "proto",
+	KindTickets:   "tickets",
 }
 
 func (s *draftService) Draft(ctx context.Context, req DraftRequest, emit func(token string) error) (*Result, error) {
-	var system string
-	switch req.Kind {
-	case KindDiscovery:
-		system = discoveryRules
-	case KindDesign:
-		system = designRules
-	case KindProto:
-		system = protoRules
+	name, ok := draftKindNames[req.Kind]
+	if !ok {
+		return nil, fmt.Errorf("draft kind must be discovery, design, proto or tickets")
+	}
+	wt, ok := s.types.ByDraftKind(name)
+	if !ok || strings.TrimSpace(wt.System) == "" {
+		return nil, fmt.Errorf("no work type configured for draft kind %q", name)
+	}
+	system := wt.System
+	if req.Kind == KindProto {
 		if !protoPackageRe.MatchString(req.ProtoPackage) {
 			return nil, fmt.Errorf("proto package %q must match [a-z][a-z0-9_]*", req.ProtoPackage)
 		}
 		if !protoMessageRe.MatchString(req.Title) {
 			return nil, fmt.Errorf("proto drafts need the domain object's PascalCase name as the title, got %q", req.Title)
 		}
-	case KindTickets:
-		system = ticketsRules
-	default:
-		return nil, fmt.Errorf("draft kind must be discovery, design, proto or tickets")
 	}
 	if strings.TrimSpace(req.Title) == "" && strings.TrimSpace(req.Source) == "" {
 		return nil, fmt.Errorf("a title or source material is required")
