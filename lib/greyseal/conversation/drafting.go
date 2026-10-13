@@ -86,6 +86,24 @@ func (srv *conversationService) draftReply(ctx context.Context, conv *greysealv1
 	if err := srv.messageRepo.Create(ctx, msg); err != nil {
 		return nil, fmt.Errorf("failed to save draft: %w", err)
 	}
+
+	// Surface any open questions the template left in the draft as a
+	// follow-up nudge, rather than leaving them sitting inertly in the
+	// markdown for the user to notice on their own. Best-effort: the draft
+	// itself already succeeded, so a failure here is logged, not fatal.
+	if questions := extractOpenQuestions(body); len(questions) > 0 {
+		nudge := &greysealv1.Message{
+			Uuid:             uuid.New().String(),
+			ConversationUuid: conv.Uuid,
+			Role:             greysealv1.MessageRole_MESSAGE_ROLE_ASSISTANT,
+			Content:          openQuestionsNudge(questions),
+			CreatedAt:        timestamppb.New(time.Now()),
+		}
+		if err := srv.messageRepo.Create(ctx, nudge); err != nil {
+			srv.logger.Warn("failed to save open-questions nudge", zap.String("conversation_uuid", conv.Uuid), zap.Error(err))
+		}
+	}
+
 	return msg, nil
 }
 
