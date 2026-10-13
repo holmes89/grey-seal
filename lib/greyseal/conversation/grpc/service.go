@@ -103,6 +103,7 @@ func (h *ConversationHandler) KeepDraft(ctx context.Context, req *connect.Reques
 		ProjectUUID:      req.Msg.GetProjectUuid(),
 		ProductUUID:      req.Msg.GetProductUuid(),
 		DesignUUID:       req.Msg.GetDesignUuid(),
+		NarwhalDocUUID:   req.Msg.GetNarwhalDocUuid(),
 	})
 	switch {
 	case errors.Is(err, entity.ErrKeepUnavailable):

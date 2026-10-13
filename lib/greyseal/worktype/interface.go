@@ -20,6 +20,10 @@ type WorkType struct {
 	// DraftKind names the draft the type produces: discovery, design,
 	// tickets or proto. Empty means the type is plain chat.
 	DraftKind string `yaml:"draft_kind"`
+	// NextWorkType is the id of the work type offered as a next step after
+	// a draft of this type is kept (e.g. "design" for discovery). Empty
+	// means no chain is offered.
+	NextWorkType string `yaml:"next_work_type"`
 	// UseRAG marks plain-chat types that should search the knowledge base.
 	UseRAG bool `yaml:"use_rag"`
 	// Hidden types are loadable by ID but not offered in the welcome.

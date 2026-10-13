@@ -61,6 +61,14 @@ func (srv *conversationService) draftReply(ctx context.Context, conv *greysealv1
 	}
 
 	srv.logger.Info("drafting in chat", zap.String("conversation_uuid", conv.Uuid), zap.String("work_type", wt.ID), zap.Bool("retry", retry))
+	return srv.finishDraft(ctx, conv, wt, kind, title, source, current, stream)
+}
+
+// finishDraft runs the drafter, saves the resulting draft message, and
+// surfaces any open questions it left as a follow-up nudge. Shared by
+// draftReply (refining from chat history) and draftFromSeed (chaining
+// straight from a just-kept draft).
+func (srv *conversationService) finishDraft(ctx context.Context, conv *greysealv1.Conversation, wt worktype.WorkType, kind draft.Kind, title, source, current string, stream func(token string) error) (*greysealv1.Message, error) {
 	res, err := srv.drafter.Draft(ctx, draft.DraftRequest{Kind: kind, Title: title, Source: source, Current: current}, stream)
 	if err != nil {
 		srv.logger.Error("chat draft failed", zap.String("conversation_uuid", conv.Uuid), zap.Error(err))

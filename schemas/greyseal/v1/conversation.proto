@@ -51,4 +51,12 @@ message Conversation {
   // work_type is the id of the work type (design, discovery, ...) chosen for
   // this conversation. "pending" until the user answers the welcome message; empty on conversations created before work types existed (plain chat).
   string work_type = 9;
+  // pending_chain_offer is the work type id offered as a next step after
+  // keeping a draft (e.g. "design" after a discovery doc is kept), empty
+  // once answered or when no chain was offered.
+  string pending_chain_offer = 10;
+  // pending_chain_offer_source is the kept draft's own content, used as the
+  // seed when the offer is accepted instead of re-deriving it from the chat
+  // transcript. Empty alongside pending_chain_offer.
+  string pending_chain_offer_source = 11;
 }

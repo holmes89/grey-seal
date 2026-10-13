@@ -2,6 +2,7 @@ id: design
 label: Design
 prompt: What would you like to design?
 draft_kind: design
+next_work_type: tickets
 template: |-
     # Design: <Name>
 

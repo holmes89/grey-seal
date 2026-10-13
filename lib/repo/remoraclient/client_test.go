@@ -42,13 +42,21 @@ func (s *fakeSession) Close() error { s.f.closed++; return nil }
 
 func TestCreateDesign(t *testing.T) {
 	f := &fakeProvider{result: `{"data":{"uuid":"d-1","title":"T"}}`}
-	id, err := remoraclient.New(f).CreateDesign(context.Background(), "proj", "T", "desc", "# body")
+	id, err := remoraclient.New(f).CreateDesign(context.Background(), "proj", "T", "desc", "# body", "")
 	require.NoError(t, err)
 	require.Equal(t, "d-1", id)
 	require.Equal(t, "create_design", f.calls[0].name)
 	require.Equal(t, "proj", f.calls[0].args["project_uuid"])
 	require.Equal(t, "# body", f.calls[0].args["body"])
+	require.NotContains(t, f.calls[0].args, "narwhal_doc_uuid")
 	require.Equal(t, 1, f.closed)
+}
+
+func TestCreateDesign_LinksNarwhalDoc(t *testing.T) {
+	f := &fakeProvider{result: `{"data":{"uuid":"d-1"}}`}
+	_, err := remoraclient.New(f).CreateDesign(context.Background(), "proj", "T", "desc", "# body", "doc-1")
+	require.NoError(t, err)
+	require.Equal(t, "doc-1", f.calls[0].args["narwhal_doc_uuid"])
 }
 
 func TestCreateDiscoveryDoc(t *testing.T) {
@@ -76,16 +84,16 @@ func TestCreateTicket_IsADraftLinkedToTheDesign(t *testing.T) {
 func TestErrors(t *testing.T) {
 	ctx := context.Background()
 
-	_, err := remoraclient.New(&fakeProvider{sessErr: errors.New("down")}).CreateDesign(ctx, "p", "t", "", "b")
+	_, err := remoraclient.New(&fakeProvider{sessErr: errors.New("down")}).CreateDesign(ctx, "p", "t", "", "b", "")
 	require.ErrorContains(t, err, "down")
 
 	f := &fakeProvider{err: errors.New("tool failed")}
-	_, err = remoraclient.New(f).CreateDesign(ctx, "p", "t", "", "b")
+	_, err = remoraclient.New(f).CreateDesign(ctx, "p", "t", "", "b", "")
 	require.ErrorContains(t, err, "tool failed")
 	require.Equal(t, 1, f.closed, "session is closed on failure")
 
-	_, err = remoraclient.New(&fakeProvider{result: "not json"}).CreateDesign(ctx, "p", "t", "", "b")
+	_, err = remoraclient.New(&fakeProvider{result: "not json"}).CreateDesign(ctx, "p", "t", "", "b", "")
 	require.ErrorContains(t, err, "returned no uuid")
-	_, err = remoraclient.New(&fakeProvider{result: `{"data":{}}`}).CreateDesign(ctx, "p", "t", "", "b")
+	_, err = remoraclient.New(&fakeProvider{result: `{"data":{}}`}).CreateDesign(ctx, "p", "t", "", "b", "")
 	require.ErrorContains(t, err, "returned no uuid")
 }

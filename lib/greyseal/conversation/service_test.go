@@ -139,6 +139,61 @@ func (s *ConversationServiceTestSuite) TestChat_PendingMatchSetsWorkTypeWithoutL
 	s.Equal(msg.GetContent(), streamed)
 }
 
+func (s *ConversationServiceTestSuite) TestChat_AcceptsChainOfferAndDraftsFromSeed() {
+	seed := "# Feature Discovery: Notes\n\n## Overview\nSomething."
+	conv := &v1.Conversation{
+		Uuid: "conv-chain", Title: "", WorkType: "discovery",
+		PendingChainOffer: "design", PendingChainOfferSource: seed,
+	}
+	s.convRepo.On("Get", mock.Anything, "conv-chain").Return(conv, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.convRepo.On("Update", mock.Anything, "conv-chain", mock.MatchedBy(func(c *v1.Conversation) bool {
+		return c.PendingChainOffer == "" && c.WorkType == "discovery"
+	})).Return(nil).Once()
+	s.convRepo.On("Update", mock.Anything, "conv-chain", mock.MatchedBy(func(c *v1.Conversation) bool {
+		return c.PendingChainOffer == "" && c.WorkType == "design"
+	})).Return(nil).Once()
+	s.drafter.On("Draft", mock.Anything, mock.MatchedBy(func(r draft.DraftRequest) bool {
+		return r.Kind == draft.KindDesign && r.Source == seed && r.Current == ""
+	}), mock.Anything).Return(&draft.Result{Body: "# Design: Notes"}, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.DraftKind == "design" && m.Content == "# Design: Notes"
+	})).Return(nil).Once()
+
+	msg, err := s.svc.Chat(context.Background(), "conv-chain", "yes", func(string) error { return nil })
+	s.Require().NoError(err)
+	s.Equal("design", msg.GetDraftKind())
+	s.Equal("# Design: Notes", msg.GetContent())
+}
+
+func (s *ConversationServiceTestSuite) TestChat_DecliningChainOfferFallsThroughToNormalDraftHandling() {
+	conv := &v1.Conversation{
+		Uuid: "conv-chain2", Title: "", WorkType: "design",
+		PendingChainOffer: "tickets", PendingChainOfferSource: "# Design: X",
+	}
+	s.convRepo.On("Get", mock.Anything, "conv-chain2").Return(conv, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.convRepo.On("Update", mock.Anything, "conv-chain2", mock.MatchedBy(func(c *v1.Conversation) bool {
+		return c.PendingChainOffer == "" && c.WorkType == "design"
+	})).Return(nil).Once()
+	s.msgRepo.On("ListByConversation", mock.Anything, "conv-chain2").Return([]*v1.Message{
+		{Uuid: "p", Role: v1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "What would you like to design?"},
+		{Uuid: "u1", Role: v1.MessageRole_MESSAGE_ROLE_USER, Content: "A tracker"},
+	}, nil)
+	s.drafter.On("Draft", mock.Anything, mock.Anything, mock.Anything).Return(&draft.Result{Body: "# Design: Tracker v2"}, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.DraftKind == "design" && m.Content == "# Design: Tracker v2"
+	})).Return(nil).Once()
+
+	msg, err := s.svc.Chat(context.Background(), "conv-chain2", "no thanks, not yet", func(string) error { return nil })
+	s.Require().NoError(err)
+	s.Equal("design", msg.GetDraftKind())
+}
+
 func (s *ConversationServiceTestSuite) TestChat_PendingMissReoffersOptions() {
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
 		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT &&
