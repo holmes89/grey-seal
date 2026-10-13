@@ -62,11 +62,6 @@ type Searcher interface {
 	Search(ctx context.Context, query string, limit int32, resourceUUIDs []string) ([]SearchResult, error)
 }
 
-// RoleRepository fetches role data by UUID.
-type RoleRepository interface {
-	Get(ctx context.Context, id string) (*greysealv1.Role, error)
-}
-
 // CachedResource is a resource snippet stored in the cache for a conversation.
 type CachedResource struct {
 	EntityUUID string

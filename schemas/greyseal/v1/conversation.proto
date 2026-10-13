@@ -31,8 +31,8 @@ message Conversation {
   // title is an optional display name; can be set manually or auto-generated
   // from the first exchange.
   string title = 2;
-  // role_uuid optionally links to a Role that sets the system prompt.
-  string role_uuid = 3;
+  reserved 3;
+  reserved "role_uuid";
   // resource_uuids optionally scopes retrieval to a specific set of resources.
   // When empty, all indexed resources are searched.
   repeated string resource_uuids = 4;
@@ -42,4 +42,7 @@ message Conversation {
   repeated Message messages = 6;
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp updated_at = 8;
+  // work_type is the id of the work type (design, discovery, ...) chosen for
+  // this conversation. Empty until the user answers the welcome message.
+  string work_type = 9;
 }

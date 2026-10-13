@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/holmes89/archaea/testutil"
-	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/holmes89/grey-seal/lib/repo"
+	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -21,9 +21,6 @@ const (
 	convUUID2 = "00000000-0000-0000-0000-000000000002"
 	convUUID3 = "00000000-0000-0000-0000-000000000003"
 	convUUID4 = "00000000-0000-0000-0000-000000000004"
-	roleUUID1 = "00000000-0000-0000-0000-000000000011"
-	roleUUID2 = "00000000-0000-0000-0000-000000000012"
-	roleUUID3 = "00000000-0000-0000-0000-000000000013"
 )
 
 // integrationDSN holds the full postgres:// URL used by repo.NewDatabase.
@@ -94,6 +91,33 @@ func (s *ConversationRepoTestSuite) TestUpdate() {
 	s.Equal("After Update", got.GetTitle())
 }
 
+func (s *ConversationRepoTestSuite) TestWorkTypeSurvivesUpdatesThatOmitIt() {
+	c := &v1.Conversation{
+		Uuid:      convUUID4,
+		Title:     "Work type",
+		WorkType:  "design",
+		CreatedAt: timestamppb.New(time.Now()),
+		UpdatedAt: timestamppb.New(time.Now()),
+	}
+	s.Require().NoError(s.conv.Create(context.Background(), c))
+
+	got, err := s.conv.Get(context.Background(), c.Uuid)
+	s.Require().NoError(err)
+	s.Equal("design", got.GetWorkType())
+
+	// A rename (or summary refresh) carries no work type and must not clear it.
+	s.Require().NoError(s.conv.Update(context.Background(), c.Uuid, &v1.Conversation{Uuid: c.Uuid, Title: "Renamed"}))
+	got, err = s.conv.Get(context.Background(), c.Uuid)
+	s.Require().NoError(err)
+	s.Equal("Renamed", got.GetTitle())
+	s.Equal("design", got.GetWorkType())
+
+	s.Require().NoError(s.conv.Update(context.Background(), c.Uuid, &v1.Conversation{Uuid: c.Uuid, Title: "Renamed", WorkType: "tickets"}))
+	got, err = s.conv.Get(context.Background(), c.Uuid)
+	s.Require().NoError(err)
+	s.Equal("tickets", got.GetWorkType())
+}
+
 func (s *ConversationRepoTestSuite) TestDelete() {
 	c := &v1.Conversation{
 		Uuid:      convUUID3,
@@ -127,73 +151,4 @@ func (s *ConversationRepoTestSuite) TestList() {
 
 func TestConversationRepoTestSuite(t *testing.T) {
 	suite.Run(t, new(ConversationRepoTestSuite))
-}
-
-// --- Role repo suite ---
-
-type RoleRepoTestSuite struct {
-	suite.Suite
-	db   *repo.Conn
-	role *repo.RoleRepo
-}
-
-func (s *RoleRepoTestSuite) SetupTest() {
-	db, err := repo.NewDatabase(integrationDSN)
-	s.Require().NoError(err)
-	s.db = db
-	s.role = &repo.RoleRepo{Conn: db}
-}
-
-func (s *RoleRepoTestSuite) TearDownTest() {
-	_, _ = s.db.DB().Exec("DELETE FROM roles")
-	s.db.Close()
-}
-
-func (s *RoleRepoTestSuite) TestCreateAndGet() {
-	r := &v1.Role{
-		Uuid:         roleUUID1,
-		Name:         "Test Role",
-		SystemPrompt: "You are helpful.",
-		CreatedAt:    timestamppb.New(time.Now()),
-	}
-	s.Require().NoError(s.role.Create(context.Background(), r))
-
-	got, err := s.role.Get(context.Background(), r.Uuid)
-	s.Require().NoError(err)
-	s.Equal("Test Role", got.GetName())
-	s.Equal("You are helpful.", got.GetSystemPrompt())
-}
-
-func (s *RoleRepoTestSuite) TestUpdate() {
-	r := &v1.Role{
-		Uuid:         roleUUID2,
-		Name:         "Before",
-		SystemPrompt: "Prompt",
-		CreatedAt:    timestamppb.New(time.Now()),
-	}
-	s.Require().NoError(s.role.Create(context.Background(), r))
-
-	r.Name = "After"
-	s.Require().NoError(s.role.Update(context.Background(), r.Uuid, r))
-
-	got, err := s.role.Get(context.Background(), r.Uuid)
-	s.Require().NoError(err)
-	s.Equal("After", got.GetName())
-}
-
-func (s *RoleRepoTestSuite) TestDelete() {
-	r := &v1.Role{
-		Uuid:      roleUUID3,
-		Name:      "To Delete",
-		CreatedAt: timestamppb.New(time.Now()),
-	}
-	s.Require().NoError(s.role.Create(context.Background(), r))
-	s.Require().NoError(s.role.Delete(context.Background(), r.Uuid))
-
-	_, err := s.role.Get(context.Background(), r.Uuid)
-	s.Require().Error(err)
-}
-
-func TestRoleRepoTestSuite(t *testing.T) {
-	suite.Run(t, new(RoleRepoTestSuite))
 }

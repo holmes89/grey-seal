@@ -21,8 +21,6 @@ import (
 	draftgrpc "github.com/holmes89/grey-seal/lib/greyseal/draft/grpc"
 	resourcesvc "github.com/holmes89/grey-seal/lib/greyseal/resource"
 	resourcegrpc "github.com/holmes89/grey-seal/lib/greyseal/resource/grpc"
-	rolesvc "github.com/holmes89/grey-seal/lib/greyseal/role"
-	rolegrpc "github.com/holmes89/grey-seal/lib/greyseal/role/grpc"
 	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/holmes89/grey-seal/lib/repo/aiderrunner"
@@ -97,12 +95,6 @@ func main() {
 		logger.Fatal("failed to load work types", zap.Error(err))
 	}
 
-	roleRepo := &repo.RoleRepo{Conn: store}
-	roleSvc := rolesvc.NewRoleService(roleRepo, logger)
-	rolePath, roleHandler := servicesv1connect.NewRoleServiceHandler(rolegrpc.NewRoleHandler(roleSvc))
-	logger.Info("registering role service route", zap.String("path", rolePath))
-	srv.Handle(rolePath, roleHandler)
-
 	// Resource service (Kafka indexer is wired only when KAFKA_BROKERS is set)
 	var indexer resourcesvc.Indexer
 	if brokers := os.Getenv("KAFKA_BROKERS"); brokers != "" {
@@ -139,7 +131,7 @@ func main() {
 		convRepo,
 		messageRepo,
 		searcher,
-		roleRepo,
+		workTypes,
 		ollamaLLM,
 		resourceCache,
 		logger,

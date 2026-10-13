@@ -24,7 +24,6 @@ func NewConversationHandler(svc entity.ConversationService) *ConversationHandler
 func (h *ConversationHandler) CreateConversation(ctx context.Context, req *connect.Request[services.CreateConversationRequest]) (*connect.Response[services.CreateConversationResponse], error) {
 	conv := &greysealv1.Conversation{
 		Title:         req.Msg.GetTitle(),
-		RoleUuid:      req.Msg.GetRoleUuid(),
 		ResourceUuids: req.Msg.GetResourceUuids(),
 	}
 	result, err := h.svc.Create(ctx, conv)
@@ -59,7 +58,6 @@ func (h *ConversationHandler) UpdateConversation(ctx context.Context, req *conne
 	conv := &greysealv1.Conversation{
 		Uuid:          req.Msg.GetUuid(),
 		Title:         req.Msg.GetTitle(),
-		RoleUuid:      req.Msg.GetRoleUuid(),
 		ResourceUuids: req.Msg.GetResourceUuids(),
 	}
 	result, err := h.svc.Update(ctx, req.Msg.GetUuid(), conv)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/holmes89/archaea/base"
+	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -30,11 +31,11 @@ type LLMMessage struct {
 type conversationService struct {
 	conversationRepo base.Repository[*greysealv1.Conversation]
 	messageRepo      MessageRepository
-	searcher         Searcher         // optional
-	roleRepo         RoleRepository   // optional
-	llm              LLM              // optional
-	cache            ResourceCache    // optional; disables per-conversation snippet caching when nil
-	transcriptWriter TranscriptWriter // optional; nil = no transcript
+	searcher         Searcher          // optional
+	workTypes        worktype.Registry // optional; nil = every conversation is plain chat
+	llm              LLM               // optional
+	cache            ResourceCache     // optional; disables per-conversation snippet caching when nil
+	transcriptWriter TranscriptWriter  // optional; nil = no transcript
 	logger           *zap.Logger
 }
 
@@ -42,7 +43,7 @@ func NewConversationService(
 	conversationRepo base.Repository[*greysealv1.Conversation],
 	messageRepo MessageRepository,
 	searcher Searcher,
-	roleRepo RoleRepository,
+	workTypes worktype.Registry,
 	llm LLM,
 	cache ResourceCache,
 	logger *zap.Logger,
@@ -52,7 +53,7 @@ func NewConversationService(
 		conversationRepo: conversationRepo,
 		messageRepo:      messageRepo,
 		searcher:         searcher,
-		roleRepo:         roleRepo,
+		workTypes:        workTypes,
 		llm:              llm,
 		cache:            cache,
 		transcriptWriter: transcriptWriter,
@@ -135,7 +136,7 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		return nil, fmt.Errorf("failed to save user message: %w", err)
 	}
 
-	// 2. Load conversation to get role_uuid and resource_uuids scope
+	// 2. Load conversation to get work_type and resource_uuids scope
 	conv, err := srv.conversationRepo.Get(ctx, conversationUUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load conversation: %w", err)
@@ -147,13 +148,10 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 		"Be concise, accurate, and cite sources when relevant."
 	llmMessages := []LLMMessage{{Role: "system", Content: systemPromptText}}
 
-	// 3. Load role system prompt if role_uuid is set — overrides the default.
-	if conv.RoleUuid != "" && srv.roleRepo != nil {
-		role, err := srv.roleRepo.Get(ctx, conv.RoleUuid)
-		if err == nil && role.SystemPrompt != "" {
-			systemPromptText = role.SystemPrompt
-			llmMessages = []LLMMessage{{Role: "system", Content: systemPromptText}}
-		}
+	// 3. A plain-chat work type (e.g. research) overrides the default prompt.
+	if wt, ok := srv.workType(conv.WorkType); ok && wt.DraftKind == "" && wt.System != "" {
+		systemPromptText = wt.System
+		llmMessages = []LLMMessage{{Role: "system", Content: systemPromptText}}
 	}
 
 	// 4. Load message history and handle overflow summarisation
@@ -176,7 +174,7 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 			_ = srv.conversationRepo.Update(ctx, conversationUUID, &greysealv1.Conversation{
 				Uuid:          conv.Uuid,
 				Title:         conv.Title,
-				RoleUuid:      conv.RoleUuid,
+				WorkType:      conv.WorkType,
 				ResourceUuids: conv.ResourceUuids,
 				Summary:       generated,
 				UpdatedAt:     timestamppb.New(time.Now()),
@@ -286,7 +284,7 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	_ = srv.conversationRepo.Update(ctx, conversationUUID, &greysealv1.Conversation{
 		Uuid:          conversationUUID,
 		Title:         conv.Title,
-		RoleUuid:      conv.RoleUuid,
+		WorkType:      conv.WorkType,
 		ResourceUuids: conv.ResourceUuids,
 		Summary:       conv.Summary,
 		UpdatedAt:     timestamppb.New(time.Now()),
@@ -378,4 +376,12 @@ func (srv *conversationService) summarizeMessages(ctx context.Context, messages 
 
 func (srv *conversationService) SubmitFeedback(ctx context.Context, messageUUID string, feedback int32) error {
 	return srv.messageRepo.UpdateFeedback(ctx, messageUUID, feedback)
+}
+
+// workType resolves a conversation's work type, if any is set and known.
+func (srv *conversationService) workType(id string) (worktype.WorkType, bool) {
+	if id == "" || srv.workTypes == nil {
+		return worktype.WorkType{}, false
+	}
+	return srv.workTypes.Get(id)
 }

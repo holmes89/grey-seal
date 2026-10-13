@@ -22,8 +22,8 @@ service ConversationService {
 message CreateConversationRequest {
   // title is optional; left blank it can be auto-generated after the first exchange.
   string title = 1;
-  // role_uuid optionally assigns a Role system prompt to this conversation.
-  string role_uuid = 2;
+  reserved 2;
+  reserved "role_uuid";
   // resource_uuids optionally scopes retrieval to specific resources.
   repeated string resource_uuids = 3;
 }
@@ -56,7 +56,8 @@ message UpdateConversationRequest {
   string uuid = 1;
   // Fields that can be mutated after creation.
   optional string title = 2;
-  optional string role_uuid = 3;
+  reserved 3;
+  reserved "role_uuid";
   repeated string resource_uuids = 4;
 }
 

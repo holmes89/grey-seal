@@ -9,6 +9,7 @@ import (
 
 	"github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	"github.com/holmes89/grey-seal/lib/greyseal/conversation/mocks"
+	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
@@ -19,7 +20,7 @@ type ConversationServiceTestSuite struct {
 	convRepo *mocks.MockConversationRepository
 	msgRepo  *mocks.MockMessageRepository
 	searcher *mocks.MockSearcher
-	roleRepo *mocks.MockRoleRepository
+	types    worktype.Registry
 	llm      *mocks.MockLLM
 	svc      conversation.ConversationService
 }
@@ -28,10 +29,12 @@ func (s *ConversationServiceTestSuite) SetupTest() {
 	s.convRepo = mocks.NewMockConversationRepository(s.T())
 	s.msgRepo = mocks.NewMockMessageRepository(s.T())
 	s.searcher = mocks.NewMockSearcher(s.T())
-	s.roleRepo = mocks.NewMockRoleRepository(s.T())
+	types, err := worktype.Load("")
+	s.Require().NoError(err)
+	s.types = types
 	s.llm = mocks.NewMockLLM(s.T())
 	// nil cache — tests that need it create their own service instance
-	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, nil, zap.NewNop(), nil)
+	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.types, s.llm, nil, zap.NewNop(), nil)
 }
 
 func (s *ConversationServiceTestSuite) TestList() {
@@ -207,7 +210,7 @@ func (s *ConversationServiceTestSuite) TestChat_CacheHit() {
 	s.T().Skip("cache temporarily disabled — re-enable after fixing per-query keying strategy")
 	cache := mocks.NewMockResourceCache(s.T())
 	svc := conversation.NewConversationService(
-		s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, cache, zap.NewNop(), nil,
+		s.convRepo, s.msgRepo, s.searcher, s.types, s.llm, cache, zap.NewNop(), nil,
 	)
 
 	convUUID := "conv-cache-hit"
@@ -240,7 +243,7 @@ func (s *ConversationServiceTestSuite) TestChat_CacheMiss() {
 	s.T().Skip("cache temporarily disabled — re-enable after fixing per-query keying strategy")
 	cache := mocks.NewMockResourceCache(s.T())
 	svc := conversation.NewConversationService(
-		s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, cache, zap.NewNop(), nil,
+		s.convRepo, s.msgRepo, s.searcher, s.types, s.llm, cache, zap.NewNop(), nil,
 	)
 
 	convUUID := "conv-cache-miss"

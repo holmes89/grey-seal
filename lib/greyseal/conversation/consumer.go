@@ -95,7 +95,7 @@ func (c *ConversationConsumer) run() {
 		conversation := &entitiesv1.Conversation{
 			Uuid:          uuid.New().String(),
 			Title:         i.Title,
-			RoleUuid:      i.RoleUuid,
+			WorkType:      i.WorkType,
 			ResourceUuids: i.ResourceUuids,
 			Summary:       i.Summary,
 			Messages:      i.Messages,
