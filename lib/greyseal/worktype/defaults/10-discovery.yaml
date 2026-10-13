@@ -1,0 +1,32 @@
+id: discovery
+label: Discovery
+prompt: What would you like to explore?
+draft_kind: discovery
+template: |-
+    # Feature Discovery: <Name> - <One-line description>
+
+    ## Overview
+    ## Problem Statement
+    ## Goals
+    - Primary goal
+    - Secondary goals
+    ## Open Questions
+    | # | Question | Leaning |
+    | --- | --- | --- |
+    ## Success Metrics
+    ## Dependencies
+    ## Timeline
+    ## Alternatives Considered
+    ## References
+system: |-
+    You write discovery documents for a software team.
+    Output only the markdown document, following this template's headings exactly, in order:
+
+    {{template}}
+
+    Rules:
+    - Discovery answers what problem, and for whom. It may conclude "do not build this"; say so plainly when the source supports it.
+    - Write Open Questions as the table shown, each with a leaning — a question with no leaning gives the reader nothing to react to.
+    - Every Alternatives Considered entry states why it was rejected.
+    - Use only facts from the source material. Record anything unknown as an open question; never invent names, numbers or dates.
+    - Be concise: short paragraphs and bullets, no filler.
