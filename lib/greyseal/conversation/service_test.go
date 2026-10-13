@@ -60,6 +60,7 @@ func (s *ConversationServiceTestSuite) TestCreate_AssignsUUID() {
 	s.convRepo.On("Create", mock.Anything, mock.MatchedBy(func(c *v1.Conversation) bool {
 		return c.Title == "New Chat" && c.Uuid != ""
 	})).Return(nil)
+	s.msgRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 
 	result, err := s.svc.Create(context.Background(), &v1.Conversation{Title: "New Chat"})
 	s.Require().NoError(err)
@@ -71,10 +72,77 @@ func (s *ConversationServiceTestSuite) TestCreate_PreservesUUID() {
 	s.convRepo.On("Create", mock.Anything, mock.MatchedBy(func(c *v1.Conversation) bool {
 		return c.Uuid == "existing-uuid"
 	})).Return(nil)
+	s.msgRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 
 	result, err := s.svc.Create(context.Background(), &v1.Conversation{Uuid: "existing-uuid", Title: "Chat"})
 	s.Require().NoError(err)
 	s.Equal("existing-uuid", result.GetUuid())
+}
+
+func (s *ConversationServiceTestSuite) TestCreate_StartsWithWelcome() {
+	s.convRepo.On("Create", mock.Anything, mock.MatchedBy(func(c *v1.Conversation) bool {
+		return c.WorkType == worktype.Pending
+	})).Return(nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT &&
+			m.Content == "Hi! How can I help? Discovery, Design, Tickets, Research, or Something else."
+	})).Return(nil).Once()
+
+	result, err := s.svc.Create(context.Background(), &v1.Conversation{Title: "New Chat"})
+	s.Require().NoError(err)
+	s.Equal(worktype.Pending, result.GetWorkType())
+	s.Require().Len(result.GetMessages(), 1)
+}
+
+func (s *ConversationServiceTestSuite) TestCreate_KeepsGivenWorkTypeWithoutWelcome() {
+	s.convRepo.On("Create", mock.Anything, mock.MatchedBy(func(c *v1.Conversation) bool {
+		return c.WorkType == "research"
+	})).Return(nil)
+
+	result, err := s.svc.Create(context.Background(), &v1.Conversation{Title: "Chat", WorkType: "research"})
+	s.Require().NoError(err)
+	s.Empty(result.GetMessages())
+}
+
+func (s *ConversationServiceTestSuite) chatWhilePending(content string) (*v1.Message, string) {
+	convUUID := "conv-pending"
+	conv := &v1.Conversation{Uuid: convUUID, Title: "Chat", WorkType: worktype.Pending}
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.convRepo.On("Get", mock.Anything, convUUID).Return(conv, nil)
+
+	var streamed string
+	msg, err := s.svc.Chat(context.Background(), convUUID, content, func(tok string) error {
+		streamed += tok
+		return nil
+	})
+	s.Require().NoError(err)
+	return msg, streamed
+}
+
+func (s *ConversationServiceTestSuite) TestChat_PendingMatchSetsWorkTypeWithoutLLM() {
+	s.convRepo.On("Update", mock.Anything, "conv-pending", mock.MatchedBy(func(c *v1.Conversation) bool {
+		return c.WorkType == "design"
+	})).Return(nil).Once()
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT && m.Content == "What would you like to design?"
+	})).Return(nil).Once()
+
+	msg, streamed := s.chatWhilePending("  Design ")
+	s.Equal("What would you like to design?", msg.GetContent())
+	s.Equal(msg.GetContent(), streamed)
+}
+
+func (s *ConversationServiceTestSuite) TestChat_PendingMissReoffersOptions() {
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT &&
+			strings.HasPrefix(m.Content, "I didn't catch that.") && strings.Contains(m.Content, "Design")
+	})).Return(nil).Once()
+
+	msg, _ := s.chatWhilePending("banana")
+	s.Contains(msg.GetContent(), "Something else")
+	s.convRepo.AssertNotCalled(s.T(), "Update", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func (s *ConversationServiceTestSuite) TestUpdate() {

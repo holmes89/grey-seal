@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package schemas.greyseal.services.v1;
+
+import "schemas/greyseal/v1/worktype.proto";
+
+service WorkTypeService {
+  // ListWorkTypes returns the work types offered when starting a chat.
+  rpc ListWorkTypes(ListWorkTypesRequest) returns (ListWorkTypesResponse) {}
+}
+
+message ListWorkTypesRequest {}
+
+message ListWorkTypesResponse {
+  repeated schemas.greyseal.v1.WorkType data = 1;
+}

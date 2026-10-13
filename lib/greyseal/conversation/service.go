@@ -91,11 +91,26 @@ func (srv *conversationService) Create(ctx context.Context, data *greysealv1.Con
 	data.CreatedAt = now
 	data.UpdatedAt = now
 
+	// A new conversation with no work type starts with a welcome message
+	// asking what the user wants help with.
+	var welcome *greysealv1.Message
+	if data.WorkType == "" && srv.workTypes != nil && len(srv.workTypes.List()) > 0 {
+		data.WorkType = worktype.Pending
+		welcome = srv.newAssistantMessage(data.Uuid, welcomeText(srv.workTypes))
+	}
+
 	srv.logger.Info("creating conversation", zap.String("title", data.GetTitle()))
 	err := srv.conversationRepo.Create(ctx, data)
 	if err != nil {
 		srv.logger.Error("failed to create conversation", zap.Error(err))
 		return nil, err
+	}
+	if welcome != nil {
+		if err := srv.messageRepo.Create(ctx, welcome); err != nil {
+			srv.logger.Error("failed to save welcome message", zap.String("uuid", data.Uuid), zap.Error(err))
+			return nil, fmt.Errorf("failed to save welcome message: %w", err)
+		}
+		data.Messages = append(data.Messages, welcome)
 	}
 	srv.logger.Info("conversation created", zap.String("uuid", data.Uuid))
 	return data, nil
@@ -140,6 +155,11 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	conv, err := srv.conversationRepo.Get(ctx, conversationUUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load conversation: %w", err)
+	}
+
+	// Still waiting for the user to pick a work type: answer without the LLM.
+	if conv.WorkType == worktype.Pending && srv.workTypes != nil {
+		return srv.selectWorkType(ctx, conv, content, stream)
 	}
 
 	// Default system prompt establishes the assistant persona.

@@ -38,3 +38,7 @@ type Registry interface {
 	// List returns the selectable (non-hidden) work types in load order.
 	List() []WorkType
 }
+
+// Pending is the conversation work type while the welcome message is
+// waiting for the user to pick one. It is never defined in yaml.
+const Pending = "pending"

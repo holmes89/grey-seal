@@ -22,6 +22,7 @@ import (
 	resourcesvc "github.com/holmes89/grey-seal/lib/greyseal/resource"
 	resourcegrpc "github.com/holmes89/grey-seal/lib/greyseal/resource/grpc"
 	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
+	worktypegrpc "github.com/holmes89/grey-seal/lib/greyseal/worktype/grpc"
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/holmes89/grey-seal/lib/repo/aiderrunner"
 	"github.com/holmes89/grey-seal/lib/repo/cache"
@@ -87,13 +88,15 @@ func main() {
 		func(h http.Handler) http.Handler { return otelhttp.NewHandler(h, "grey-seal") },
 	)
 
-	// Role service
 	// Work types (design, discovery, ...) come from embedded defaults plus
 	// any yaml files in WORKTYPES_DIR.
 	workTypes, err := worktype.Load(os.Getenv("WORKTYPES_DIR"))
 	if err != nil {
 		logger.Fatal("failed to load work types", zap.Error(err))
 	}
+	workTypePath, workTypeHandler := servicesv1connect.NewWorkTypeServiceHandler(worktypegrpc.NewWorkTypeHandler(workTypes))
+	logger.Info("registering work type service route", zap.String("path", workTypePath))
+	srv.Handle(workTypePath, workTypeHandler)
 
 	// Resource service (Kafka indexer is wired only when KAFKA_BROKERS is set)
 	var indexer resourcesvc.Indexer

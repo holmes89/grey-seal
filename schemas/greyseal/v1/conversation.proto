@@ -43,6 +43,6 @@ message Conversation {
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp updated_at = 8;
   // work_type is the id of the work type (design, discovery, ...) chosen for
-  // this conversation. Empty until the user answers the welcome message.
+  // this conversation. "pending" until the user answers the welcome message; empty on conversations created before work types existed (plain chat).
   string work_type = 9;
 }

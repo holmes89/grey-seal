@@ -184,7 +184,7 @@ type Conversation struct {
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// work_type is the id of the work type (design, discovery, ...) chosen for
-	// this conversation. Empty until the user answers the welcome message.
+	// this conversation. "pending" until the user answers the welcome message; empty on conversations created before work types existed (plain chat).
 	WorkType      string `protobuf:"bytes,9,opt,name=work_type,json=workType,proto3" json:"work_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
