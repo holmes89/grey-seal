@@ -9,14 +9,14 @@ import (
 
 	"github.com/holmes89/archaea/kafka"
 	"github.com/holmes89/archaea/worker"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
-	"go.uber.org/zap"
 	"github.com/holmes89/grey-seal/lib/greyseal/resource"
 	"github.com/holmes89/grey-seal/lib/repo"
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

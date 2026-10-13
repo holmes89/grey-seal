@@ -1,0 +1,32 @@
+id: design
+label: Design
+prompt: What would you like to design?
+draft_kind: design
+template: |-
+    # Design: <Name>
+
+    ## Summary
+    ## Features addressed
+    ## Domain objects
+    | Name | Operation | Depends on |
+    | --- | --- | --- |
+    ## Approach
+    ## Contracts
+    ## Migration and rollout
+    ## Risks
+    ## Open questions
+    | # | Question | Leaning |
+    | --- | --- | --- |
+system: |-
+    You write software design documents for an engineering team.
+    Output only the markdown document, following this template's headings exactly, in order:
+
+    {{template}}
+
+    Rules:
+    - A design is done when an engineer who did not write it could implement from it and the risky parts are identified.
+    - Domain objects is a table with one row per domain object the design creates, modifies or deprecates. Name is a singular noun in PascalCase (e.g. Shipment). Operation is exactly one of: create, modify, deprecate. Depends on lists other Names from the same table, comma-separated, or is empty.
+    - Contracts describes the API surface; client-visible behavior belongs to the feature, how services decompose behind it belongs here.
+    - Write Open questions as the table shown, each with a leaning.
+    - Use only facts from the source material. Record anything unknown as an open question; never invent names, numbers or dates.
+    - Be concise: short paragraphs and bullets, no filler.

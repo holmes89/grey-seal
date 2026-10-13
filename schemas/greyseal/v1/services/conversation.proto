@@ -15,6 +15,9 @@ service ConversationService {
   // Chat sends a user message and streams back the assistant response token by token.
   rpc Chat(ChatRequest) returns (stream ChatResponse) {}
 
+  // KeepDraft writes a draft message to Remora and records where it went.
+  rpc KeepDraft(KeepDraftRequest) returns (KeepDraftResponse) {}
+
   // SubmitFeedback records user feedback on an assistant message.
   rpc SubmitFeedback(SubmitFeedbackRequest) returns (SubmitFeedbackResponse) {}
 }
@@ -22,8 +25,8 @@ service ConversationService {
 message CreateConversationRequest {
   // title is optional; left blank it can be auto-generated after the first exchange.
   string title = 1;
-  // role_uuid optionally assigns a Role system prompt to this conversation.
-  string role_uuid = 2;
+  reserved 2;
+  reserved "role_uuid";
   // resource_uuids optionally scopes retrieval to specific resources.
   repeated string resource_uuids = 3;
 }
@@ -56,7 +59,8 @@ message UpdateConversationRequest {
   string uuid = 1;
   // Fields that can be mutated after creation.
   optional string title = 2;
-  optional string role_uuid = 3;
+  reserved 3;
+  reserved "role_uuid";
   repeated string resource_uuids = 4;
 }
 
@@ -73,6 +77,9 @@ message DeleteConversationResponse {}
 message ChatRequest {
   string conversation_uuid = 1;
   string content = 2;
+  // regenerate discards the latest draft and drafts again from the same
+  // input (Retry). content is ignored.
+  bool regenerate = 3;
 }
 
 // ChatResponse is streamed; each message carries one token or chunk of content.
@@ -82,6 +89,22 @@ message ChatResponse {
   string token = 1;
   // final_message is populated only on the last streamed response.
   schemas.greyseal.v1.Message final_message = 2;
+}
+
+message KeepDraftRequest {
+  string conversation_uuid = 1;
+  string message_uuid = 2;
+  // project_uuid is the Remora project a design or tickets draft is created in.
+  string project_uuid = 3;
+  // product_uuid is the Remora product a discovery draft is created under.
+  string product_uuid = 4;
+  // design_uuid optionally links kept tickets to a design.
+  string design_uuid = 5;
+}
+
+message KeepDraftResponse {
+  // data is the draft message with kept_ref set.
+  schemas.greyseal.v1.Message data = 1;
 }
 
 message SubmitFeedbackRequest {

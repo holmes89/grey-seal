@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"connectrpc.com/connect"
@@ -24,7 +25,6 @@ func NewConversationHandler(svc entity.ConversationService) *ConversationHandler
 func (h *ConversationHandler) CreateConversation(ctx context.Context, req *connect.Request[services.CreateConversationRequest]) (*connect.Response[services.CreateConversationResponse], error) {
 	conv := &greysealv1.Conversation{
 		Title:         req.Msg.GetTitle(),
-		RoleUuid:      req.Msg.GetRoleUuid(),
 		ResourceUuids: req.Msg.GetResourceUuids(),
 	}
 	result, err := h.svc.Create(ctx, conv)
@@ -59,7 +59,6 @@ func (h *ConversationHandler) UpdateConversation(ctx context.Context, req *conne
 	conv := &greysealv1.Conversation{
 		Uuid:          req.Msg.GetUuid(),
 		Title:         req.Msg.GetTitle(),
-		RoleUuid:      req.Msg.GetRoleUuid(),
 		ResourceUuids: req.Msg.GetResourceUuids(),
 	}
 	result, err := h.svc.Update(ctx, req.Msg.GetUuid(), conv)
@@ -78,16 +77,42 @@ func (h *ConversationHandler) DeleteConversation(ctx context.Context, req *conne
 
 // Chat streams assistant tokens back to the client as they are generated.
 func (h *ConversationHandler) Chat(ctx context.Context, req *connect.Request[services.ChatRequest], stream *connect.ServerStream[services.ChatResponse]) error {
-	finalMsg, err := h.svc.Chat(ctx, req.Msg.GetConversationUuid(), req.Msg.GetContent(),
-		func(token string) error {
-			return stream.Send(&services.ChatResponse{Token: token})
-		},
+	send := func(token string) error {
+		return stream.Send(&services.ChatResponse{Token: token})
+	}
+	var (
+		finalMsg *greysealv1.Message
+		err      error
 	)
+	if req.Msg.GetRegenerate() {
+		finalMsg, err = h.svc.Regenerate(ctx, req.Msg.GetConversationUuid(), send)
+	} else {
+		finalMsg, err = h.svc.Chat(ctx, req.Msg.GetConversationUuid(), req.Msg.GetContent(), send)
+	}
 	if err != nil {
 		return err
 	}
 	// Send a final message with the fully-populated Message (uuid, references, etc.)
 	return stream.Send(&services.ChatResponse{FinalMessage: finalMsg})
+}
+
+func (h *ConversationHandler) KeepDraft(ctx context.Context, req *connect.Request[services.KeepDraftRequest]) (*connect.Response[services.KeepDraftResponse], error) {
+	msg, err := h.svc.KeepDraft(ctx, entity.KeepDraftInput{
+		ConversationUUID: req.Msg.GetConversationUuid(),
+		MessageUUID:      req.Msg.GetMessageUuid(),
+		ProjectUUID:      req.Msg.GetProjectUuid(),
+		ProductUUID:      req.Msg.GetProductUuid(),
+		DesignUUID:       req.Msg.GetDesignUuid(),
+	})
+	switch {
+	case errors.Is(err, entity.ErrKeepUnavailable):
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	case errors.Is(err, entity.ErrKeepInvalid):
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	case err != nil:
+		return nil, err
+	}
+	return connect.NewResponse(&services.KeepDraftResponse{Data: msg}), nil
 }
 
 func (h *ConversationHandler) SubmitFeedback(ctx context.Context, req *connect.Request[services.SubmitFeedbackRequest]) (*connect.Response[services.SubmitFeedbackResponse], error) {

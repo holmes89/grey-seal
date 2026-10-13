@@ -23,6 +23,12 @@ message Message {
   // feedback allows simple quality tracking: -1 negative, 0 neutral, 1 positive.
   int32 feedback = 6;
   google.protobuf.Timestamp created_at = 7;
+  // draft_kind is set (discovery, design, tickets) on assistant messages that
+  // are drafts the user can keep or retry; empty for ordinary messages.
+  string draft_kind = 8;
+  // kept_ref records where a kept draft was written, e.g. "design:<uuid>";
+  // empty until the draft is kept.
+  string kept_ref = 9;
 }
 
 // Conversation is a chat session that persists and can be resumed.
@@ -31,8 +37,8 @@ message Conversation {
   // title is an optional display name; can be set manually or auto-generated
   // from the first exchange.
   string title = 2;
-  // role_uuid optionally links to a Role that sets the system prompt.
-  string role_uuid = 3;
+  reserved 3;
+  reserved "role_uuid";
   // resource_uuids optionally scopes retrieval to a specific set of resources.
   // When empty, all indexed resources are searched.
   repeated string resource_uuids = 4;
@@ -42,4 +48,7 @@ message Conversation {
   repeated Message messages = 6;
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp updated_at = 8;
+  // work_type is the id of the work type (design, discovery, ...) chosen for
+  // this conversation. "pending" until the user answers the welcome message; empty on conversations created before work types existed (plain chat).
+  string work_type = 9;
 }

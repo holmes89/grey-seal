@@ -25,6 +25,7 @@ const (
 	ConversationService_UpdateConversation_FullMethodName = "/schemas.greyseal.services.v1.ConversationService/UpdateConversation"
 	ConversationService_DeleteConversation_FullMethodName = "/schemas.greyseal.services.v1.ConversationService/DeleteConversation"
 	ConversationService_Chat_FullMethodName               = "/schemas.greyseal.services.v1.ConversationService/Chat"
+	ConversationService_KeepDraft_FullMethodName          = "/schemas.greyseal.services.v1.ConversationService/KeepDraft"
 	ConversationService_SubmitFeedback_FullMethodName     = "/schemas.greyseal.services.v1.ConversationService/SubmitFeedback"
 )
 
@@ -39,6 +40,8 @@ type ConversationServiceClient interface {
 	DeleteConversation(ctx context.Context, in *DeleteConversationRequest, opts ...grpc.CallOption) (*DeleteConversationResponse, error)
 	// Chat sends a user message and streams back the assistant response token by token.
 	Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChatResponse], error)
+	// KeepDraft writes a draft message to Remora and records where it went.
+	KeepDraft(ctx context.Context, in *KeepDraftRequest, opts ...grpc.CallOption) (*KeepDraftResponse, error)
 	// SubmitFeedback records user feedback on an assistant message.
 	SubmitFeedback(ctx context.Context, in *SubmitFeedbackRequest, opts ...grpc.CallOption) (*SubmitFeedbackResponse, error)
 }
@@ -120,6 +123,16 @@ func (c *conversationServiceClient) Chat(ctx context.Context, in *ChatRequest, o
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ConversationService_ChatClient = grpc.ServerStreamingClient[ChatResponse]
 
+func (c *conversationServiceClient) KeepDraft(ctx context.Context, in *KeepDraftRequest, opts ...grpc.CallOption) (*KeepDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(KeepDraftResponse)
+	err := c.cc.Invoke(ctx, ConversationService_KeepDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *conversationServiceClient) SubmitFeedback(ctx context.Context, in *SubmitFeedbackRequest, opts ...grpc.CallOption) (*SubmitFeedbackResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SubmitFeedbackResponse)
@@ -141,6 +154,8 @@ type ConversationServiceServer interface {
 	DeleteConversation(context.Context, *DeleteConversationRequest) (*DeleteConversationResponse, error)
 	// Chat sends a user message and streams back the assistant response token by token.
 	Chat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error
+	// KeepDraft writes a draft message to Remora and records where it went.
+	KeepDraft(context.Context, *KeepDraftRequest) (*KeepDraftResponse, error)
 	// SubmitFeedback records user feedback on an assistant message.
 	SubmitFeedback(context.Context, *SubmitFeedbackRequest) (*SubmitFeedbackResponse, error)
 	mustEmbedUnimplementedConversationServiceServer()
@@ -170,6 +185,9 @@ func (UnimplementedConversationServiceServer) DeleteConversation(context.Context
 }
 func (UnimplementedConversationServiceServer) Chat(*ChatRequest, grpc.ServerStreamingServer[ChatResponse]) error {
 	return status.Error(codes.Unimplemented, "method Chat not implemented")
+}
+func (UnimplementedConversationServiceServer) KeepDraft(context.Context, *KeepDraftRequest) (*KeepDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method KeepDraft not implemented")
 }
 func (UnimplementedConversationServiceServer) SubmitFeedback(context.Context, *SubmitFeedbackRequest) (*SubmitFeedbackResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SubmitFeedback not implemented")
@@ -296,6 +314,24 @@ func _ConversationService_Chat_Handler(srv interface{}, stream grpc.ServerStream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ConversationService_ChatServer = grpc.ServerStreamingServer[ChatResponse]
 
+func _ConversationService_KeepDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KeepDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).KeepDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_KeepDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).KeepDraft(ctx, req.(*KeepDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ConversationService_SubmitFeedback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SubmitFeedbackRequest)
 	if err := dec(in); err != nil {
@@ -340,6 +376,10 @@ var ConversationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteConversation",
 			Handler:    _ConversationService_DeleteConversation_Handler,
+		},
+		{
+			MethodName: "KeepDraft",
+			Handler:    _ConversationService_KeepDraft_Handler,
 		},
 		{
 			MethodName: "SubmitFeedback",

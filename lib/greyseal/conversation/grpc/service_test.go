@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
+	"github.com/holmes89/archaea/base"
 	grpchandler "github.com/holmes89/grey-seal/lib/greyseal/conversation/grpc"
 	"github.com/holmes89/grey-seal/lib/greyseal/conversation/mocks"
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	services "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services"
-	"github.com/holmes89/archaea/base"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )

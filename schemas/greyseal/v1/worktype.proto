@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package schemas.greyseal.v1;
+
+// WorkType is a kind of work a conversation can be about, defined in yaml.
+message WorkType {
+  // id is the stable identifier stored on a conversation, e.g. "design".
+  string id = 1;
+  // label is the display name offered in the welcome message.
+  string label = 2;
+  // prompt is what the assistant asks after this type is chosen.
+  string prompt = 3;
+  // draft_kind is set (discovery, design, tickets) when the type produces a
+  // draft the user can keep or retry; empty for plain chat types.
+  string draft_kind = 4;
+}

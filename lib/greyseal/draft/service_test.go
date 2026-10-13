@@ -8,6 +8,7 @@ import (
 
 	"github.com/holmes89/grey-seal/lib/greyseal/draft"
 	"github.com/holmes89/grey-seal/lib/greyseal/draft/mocks"
+	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/zap"
@@ -42,7 +43,9 @@ func TestDraftServiceSuite(t *testing.T) {
 
 func (s *DraftServiceSuite) SetupTest() {
 	s.gen = mocks.NewMockGenerator(s.T())
-	s.svc = draft.NewDraftService(s.gen, zap.NewNop())
+	types, err := worktype.Load("")
+	s.Require().NoError(err)
+	s.svc = draft.NewDraftService(s.gen, types, zap.NewNop())
 }
 
 func (s *DraftServiceSuite) TestDiscovery_UsesDiscoveryTemplateAndStreams() {

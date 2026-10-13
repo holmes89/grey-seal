@@ -36,18 +36,3 @@ packages:
       outpkg: "mocks"
       mockname: "Mock{{.InterfaceName}}"
       filename: "mock_{{.InterfaceName | lower}}.go"
-  github.com/holmes89/grey-seal/lib/greyseal/role:
-    config:
-      dir: "lib/greyseal/role/mocks"
-      outpkg: "mocks"
-      mockname: "Mock{{.InterfaceName}}"
-      filename: "mock_{{.InterfaceName | lower}}.go"
-  github.com/holmes89/grey-seal/lib/ui/api:
-    config:
-      all: false
-      dir: "lib/ui/pages/mocks"
-      outpkg: "mocks"
-      filename: "mock_{{.InterfaceName | lower | camelcase}}.go"
-    interfaces:
-      ConversationService:
-      RoleService:

@@ -1,6 +1,7 @@
 //go:build ignore
 
 package conversation
+
 import (
 	"context"
 	"log"
@@ -13,7 +14,7 @@ import (
 )
 
 type MessageConsumer struct {
-	consumer    base.Consumer[*entitiesv1.Message]
+	consumer       base.Consumer[*entitiesv1.Message]
 	messageservice base.Service[*entitiesv1.Message]
 }
 
@@ -22,7 +23,7 @@ func NewMessageConsumer(
 	messageservice base.Service[*entitiesv1.Message],
 ) {
 	con := &MessageConsumer{
-		consumer:    consumer,
+		consumer:       consumer,
 		messageservice: messageservice,
 	}
 	go con.run()
@@ -42,14 +43,13 @@ func (c *MessageConsumer) run() {
 	for i := range c.consumer.Read() {
 
 		message := &entitiesv1.Message{
-			Uuid: uuid.New().String(),
+			Uuid:             uuid.New().String(),
 			ConversationUuid: i.ConversationUuid,
-			Role: i.Role,
-			Content: i.Content,
-			ResourceUuids: i.ResourceUuids,
-			Feedback: i.Feedback,
-			CreatedAt: i.CreatedAt,
-			
+			Role:             i.Role,
+			Content:          i.Content,
+			ResourceUuids:    i.ResourceUuids,
+			Feedback:         i.Feedback,
+			CreatedAt:        i.CreatedAt,
 		}
 
 		_, err := c.messageservice.Create(context.Background(), &servicesv1.CreateMessageRequest{
@@ -64,7 +64,7 @@ func (c *MessageConsumer) run() {
 }
 
 type ConversationConsumer struct {
-	consumer    base.Consumer[*entitiesv1.Conversation]
+	consumer            base.Consumer[*entitiesv1.Conversation]
 	conversationservice base.Service[*entitiesv1.Conversation]
 }
 
@@ -73,7 +73,7 @@ func NewConversationConsumer(
 	conversationservice base.Service[*entitiesv1.Conversation],
 ) {
 	con := &ConversationConsumer{
-		consumer:    consumer,
+		consumer:            consumer,
 		conversationservice: conversationservice,
 	}
 	go con.run()
@@ -93,15 +93,14 @@ func (c *ConversationConsumer) run() {
 	for i := range c.consumer.Read() {
 
 		conversation := &entitiesv1.Conversation{
-			Uuid: uuid.New().String(),
-			Title: i.Title,
-			RoleUuid: i.RoleUuid,
+			Uuid:          uuid.New().String(),
+			Title:         i.Title,
+			WorkType:      i.WorkType,
 			ResourceUuids: i.ResourceUuids,
-			Summary: i.Summary,
-			Messages: i.Messages,
-			CreatedAt: i.CreatedAt,
-			UpdatedAt: i.UpdatedAt,
-			
+			Summary:       i.Summary,
+			Messages:      i.Messages,
+			CreatedAt:     i.CreatedAt,
+			UpdatedAt:     i.UpdatedAt,
 		}
 
 		_, err := c.conversationservice.Create(context.Background(), &servicesv1.CreateConversationRequest{
@@ -114,4 +113,3 @@ func (c *ConversationConsumer) run() {
 		log.Printf("conversation %s was imported\n", i.Uuid)
 	}
 }
-

@@ -20,6 +20,17 @@ type ConversationService interface {
 	// The fully-populated assistant Message is returned when streaming completes.
 	Chat(ctx context.Context, conversationUUID string, content string, stream func(token string) error) (*greysealv1.Message, error)
 
+	// Regenerate discards the conversation's latest draft and drafts again
+	// from the same input (Retry). It errors when the conversation's work
+	// type does not produce drafts.
+	Regenerate(ctx context.Context, conversationUUID string, stream func(token string) error) (*greysealv1.Message, error)
+
+	// KeepDraft writes a draft message to Remora (design, discovery doc or
+	// tickets) and records where it went on the message. It returns
+	// ErrKeepUnavailable when Remora is not configured and ErrKeepInvalid for
+	// caller mistakes.
+	KeepDraft(ctx context.Context, in KeepDraftInput) (*greysealv1.Message, error)
+
 	// SubmitFeedback records user feedback (-1/0/1) on an assistant message.
 	SubmitFeedback(ctx context.Context, messageUUID string, feedback int32) error
 }
@@ -60,11 +71,6 @@ type SearchResult struct {
 // resourceUUIDs restricts results to those entities; if empty all indexed content is searched.
 type Searcher interface {
 	Search(ctx context.Context, query string, limit int32, resourceUUIDs []string) ([]SearchResult, error)
-}
-
-// RoleRepository fetches role data by UUID.
-type RoleRepository interface {
-	Get(ctx context.Context, id string) (*greysealv1.Role, error)
 }
 
 // CachedResource is a resource snippet stored in the cache for a conversation.

@@ -21,8 +21,8 @@ import (
 	draftgrpc "github.com/holmes89/grey-seal/lib/greyseal/draft/grpc"
 	resourcesvc "github.com/holmes89/grey-seal/lib/greyseal/resource"
 	resourcegrpc "github.com/holmes89/grey-seal/lib/greyseal/resource/grpc"
-	rolesvc "github.com/holmes89/grey-seal/lib/greyseal/role"
-	rolegrpc "github.com/holmes89/grey-seal/lib/greyseal/role/grpc"
+	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
+	worktypegrpc "github.com/holmes89/grey-seal/lib/greyseal/worktype/grpc"
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/holmes89/grey-seal/lib/repo/aiderrunner"
 	"github.com/holmes89/grey-seal/lib/repo/cache"
@@ -31,6 +31,7 @@ import (
 	"github.com/holmes89/grey-seal/lib/repo/ollama"
 	"github.com/holmes89/grey-seal/lib/repo/ollamarunner"
 	"github.com/holmes89/grey-seal/lib/repo/ollamatools"
+	"github.com/holmes89/grey-seal/lib/repo/remoraclient"
 	"github.com/holmes89/grey-seal/lib/repo/transcript"
 	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesv1connect"
 	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1/services"
@@ -88,12 +89,15 @@ func main() {
 		func(h http.Handler) http.Handler { return otelhttp.NewHandler(h, "grey-seal") },
 	)
 
-	// Role service
-	roleRepo := &repo.RoleRepo{Conn: store}
-	roleSvc := rolesvc.NewRoleService(roleRepo, logger)
-	rolePath, roleHandler := servicesv1connect.NewRoleServiceHandler(rolegrpc.NewRoleHandler(roleSvc))
-	logger.Info("registering role service route", zap.String("path", rolePath))
-	srv.Handle(rolePath, roleHandler)
+	// Work types (design, discovery, ...) come from embedded defaults plus
+	// any yaml files in WORKTYPES_DIR.
+	workTypes, err := worktype.Load(os.Getenv("WORKTYPES_DIR"))
+	if err != nil {
+		logger.Fatal("failed to load work types", zap.Error(err))
+	}
+	workTypePath, workTypeHandler := servicesv1connect.NewWorkTypeServiceHandler(worktypegrpc.NewWorkTypeHandler(workTypes))
+	logger.Info("registering work type service route", zap.String("path", workTypePath))
+	srv.Handle(workTypePath, workTypeHandler)
 
 	// Resource service (Kafka indexer is wired only when KAFKA_BROKERS is set)
 	var indexer resourcesvc.Indexer
@@ -127,11 +131,30 @@ func main() {
 		}
 	}
 
+	// Planning document drafts (discovery docs, designs). Separate model from
+	// chat: drafting wants a stronger writer than the small chat default.
+	draftModel := os.Getenv("OLLAMA_DRAFT_MODEL")
+	if draftModel == "" {
+		draftModel = "qwen3:8b"
+	}
+	draftSvc := draftsvc.NewDraftService(ollama.NewDraftLLM(os.Getenv("OLLAMA_HOST"), draftModel), workTypes, logger)
+
+	// Kept chat drafts are written to Remora over MCP; without REMORA_MCP_URL
+	// the Keep action is reported as unavailable.
+	var remoraWriter conversationsvc.RemoraWriter
+	if mcpURL := os.Getenv("REMORA_MCP_URL"); mcpURL != "" {
+		remoraWriter = remoraclient.New(mcpclient.New(mcpURL, logger))
+	} else {
+		logger.Warn("REMORA_MCP_URL not set — keeping chat drafts is unavailable")
+	}
+
 	convSvc := conversationsvc.NewConversationService(
 		convRepo,
 		messageRepo,
 		searcher,
-		roleRepo,
+		workTypes,
+		draftSvc,
+		remoraWriter,
 		ollamaLLM,
 		resourceCache,
 		logger,
@@ -204,13 +227,6 @@ func main() {
 		logger.Warn("no agent provider configured — agent service route disabled")
 	}
 
-	// Planning document drafts (discovery docs, designs). Separate model from
-	// chat: drafting wants a stronger writer than the small chat default.
-	draftModel := os.Getenv("OLLAMA_DRAFT_MODEL")
-	if draftModel == "" {
-		draftModel = "qwen3:8b"
-	}
-	draftSvc := draftsvc.NewDraftService(ollama.NewDraftLLM(os.Getenv("OLLAMA_HOST"), draftModel), logger)
 	draftPath, draftHandler := servicesv1connect.NewDraftServiceHandler(draftgrpc.NewDraftHandler(draftSvc))
 	logger.Info("registering draft service route", zap.String("path", draftPath), zap.String("model", draftModel))
 	srv.Handle(draftPath, draftHandler)

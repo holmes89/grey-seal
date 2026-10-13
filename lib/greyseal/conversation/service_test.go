@@ -2,6 +2,7 @@ package conversation_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -9,6 +10,9 @@ import (
 
 	"github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	"github.com/holmes89/grey-seal/lib/greyseal/conversation/mocks"
+	"github.com/holmes89/grey-seal/lib/greyseal/draft"
+	draftmocks "github.com/holmes89/grey-seal/lib/greyseal/draft/mocks"
+	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
@@ -19,7 +23,8 @@ type ConversationServiceTestSuite struct {
 	convRepo *mocks.MockConversationRepository
 	msgRepo  *mocks.MockMessageRepository
 	searcher *mocks.MockSearcher
-	roleRepo *mocks.MockRoleRepository
+	types    worktype.Registry
+	drafter  *draftmocks.MockDraftService
 	llm      *mocks.MockLLM
 	svc      conversation.ConversationService
 }
@@ -28,10 +33,13 @@ func (s *ConversationServiceTestSuite) SetupTest() {
 	s.convRepo = mocks.NewMockConversationRepository(s.T())
 	s.msgRepo = mocks.NewMockMessageRepository(s.T())
 	s.searcher = mocks.NewMockSearcher(s.T())
-	s.roleRepo = mocks.NewMockRoleRepository(s.T())
+	types, err := worktype.Load("")
+	s.Require().NoError(err)
+	s.types = types
+	s.drafter = draftmocks.NewMockDraftService(s.T())
 	s.llm = mocks.NewMockLLM(s.T())
 	// nil cache — tests that need it create their own service instance
-	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, nil, zap.NewNop(), nil)
+	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.types, s.drafter, nil, s.llm, nil, zap.NewNop(), nil)
 }
 
 func (s *ConversationServiceTestSuite) TestList() {
@@ -57,6 +65,7 @@ func (s *ConversationServiceTestSuite) TestCreate_AssignsUUID() {
 	s.convRepo.On("Create", mock.Anything, mock.MatchedBy(func(c *v1.Conversation) bool {
 		return c.Title == "New Chat" && c.Uuid != ""
 	})).Return(nil)
+	s.msgRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 
 	result, err := s.svc.Create(context.Background(), &v1.Conversation{Title: "New Chat"})
 	s.Require().NoError(err)
@@ -68,10 +77,195 @@ func (s *ConversationServiceTestSuite) TestCreate_PreservesUUID() {
 	s.convRepo.On("Create", mock.Anything, mock.MatchedBy(func(c *v1.Conversation) bool {
 		return c.Uuid == "existing-uuid"
 	})).Return(nil)
+	s.msgRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 
 	result, err := s.svc.Create(context.Background(), &v1.Conversation{Uuid: "existing-uuid", Title: "Chat"})
 	s.Require().NoError(err)
 	s.Equal("existing-uuid", result.GetUuid())
+}
+
+func (s *ConversationServiceTestSuite) TestCreate_StartsWithWelcome() {
+	s.convRepo.On("Create", mock.Anything, mock.MatchedBy(func(c *v1.Conversation) bool {
+		return c.WorkType == worktype.Pending
+	})).Return(nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT &&
+			m.Content == "Hi! How can I help? Discovery, Design, Tickets, Research, or Something else."
+	})).Return(nil).Once()
+
+	result, err := s.svc.Create(context.Background(), &v1.Conversation{Title: "New Chat"})
+	s.Require().NoError(err)
+	s.Equal(worktype.Pending, result.GetWorkType())
+	s.Require().Len(result.GetMessages(), 1)
+}
+
+func (s *ConversationServiceTestSuite) TestCreate_KeepsGivenWorkTypeWithoutWelcome() {
+	s.convRepo.On("Create", mock.Anything, mock.MatchedBy(func(c *v1.Conversation) bool {
+		return c.WorkType == "research"
+	})).Return(nil)
+
+	result, err := s.svc.Create(context.Background(), &v1.Conversation{Title: "Chat", WorkType: "research"})
+	s.Require().NoError(err)
+	s.Empty(result.GetMessages())
+}
+
+func (s *ConversationServiceTestSuite) chatWhilePending(content string) (*v1.Message, string) {
+	convUUID := "conv-pending"
+	conv := &v1.Conversation{Uuid: convUUID, Title: "Chat", WorkType: worktype.Pending}
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.convRepo.On("Get", mock.Anything, convUUID).Return(conv, nil)
+
+	var streamed string
+	msg, err := s.svc.Chat(context.Background(), convUUID, content, func(tok string) error {
+		streamed += tok
+		return nil
+	})
+	s.Require().NoError(err)
+	return msg, streamed
+}
+
+func (s *ConversationServiceTestSuite) TestChat_PendingMatchSetsWorkTypeWithoutLLM() {
+	s.convRepo.On("Update", mock.Anything, "conv-pending", mock.MatchedBy(func(c *v1.Conversation) bool {
+		return c.WorkType == "design"
+	})).Return(nil).Once()
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT && m.Content == "What would you like to design?"
+	})).Return(nil).Once()
+
+	msg, streamed := s.chatWhilePending("  Design ")
+	s.Equal("What would you like to design?", msg.GetContent())
+	s.Equal(msg.GetContent(), streamed)
+}
+
+func (s *ConversationServiceTestSuite) TestChat_PendingMissReoffersOptions() {
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT &&
+			strings.HasPrefix(m.Content, "I didn't catch that.") && strings.Contains(m.Content, "Design")
+	})).Return(nil).Once()
+
+	msg, _ := s.chatWhilePending("banana")
+	s.Contains(msg.GetContent(), "Something else")
+	s.convRepo.AssertNotCalled(s.T(), "Update", mock.Anything, mock.Anything, mock.Anything)
+}
+
+// --- drafting work types ---
+
+func (s *ConversationServiceTestSuite) draftingConv(workType string) *v1.Conversation {
+	return &v1.Conversation{Uuid: "conv-d", Title: "", WorkType: workType}
+}
+
+func (s *ConversationServiceTestSuite) TestChat_DraftTypeDraftsFromEverythingSinceThePrompt() {
+	conv := s.draftingConv("design")
+	s.convRepo.On("Get", mock.Anything, "conv-d").Return(conv, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.msgRepo.On("ListByConversation", mock.Anything, "conv-d").Return([]*v1.Message{
+		{Uuid: "w", Role: v1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "Hi! How can I help?"},
+		{Uuid: "u0", Role: v1.MessageRole_MESSAGE_ROLE_USER, Content: "design"},
+		{Uuid: "p", Role: v1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "What would you like to design?"},
+		{Uuid: "u1", Role: v1.MessageRole_MESSAGE_ROLE_USER, Content: "A shipping tracker"},
+	}, nil)
+	s.drafter.On("Draft", mock.Anything, mock.MatchedBy(func(r draft.DraftRequest) bool {
+		return r.Kind == draft.KindDesign && r.Source == "A shipping tracker" && r.Current == "" && r.Title == "A shipping tracker"
+	}), mock.Anything).Return(&draft.Result{Body: "# Design: Tracker"}, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT && m.DraftKind == "design" && m.Content == "# Design: Tracker"
+	})).Return(nil).Once()
+
+	msg, err := s.svc.Chat(context.Background(), "conv-d", "A shipping tracker", func(string) error { return nil })
+	s.Require().NoError(err)
+	s.Equal("design", msg.GetDraftKind())
+}
+
+func (s *ConversationServiceTestSuite) TestChat_DraftTypeFollowUpRefinesLatestDraft() {
+	s.convRepo.On("Get", mock.Anything, "conv-d").Return(s.draftingConv("discovery"), nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.msgRepo.On("ListByConversation", mock.Anything, "conv-d").Return([]*v1.Message{
+		{Uuid: "p", Role: v1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "What would you like to explore?"},
+		{Uuid: "u1", Role: v1.MessageRole_MESSAGE_ROLE_USER, Content: "Notes feature"},
+		{Uuid: "d1", Role: v1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "# Feature Discovery: v1", DraftKind: "discovery"},
+		{Uuid: "u2", Role: v1.MessageRole_MESSAGE_ROLE_USER, Content: "Add a scratch pad"},
+	}, nil)
+	s.drafter.On("Draft", mock.Anything, mock.MatchedBy(func(r draft.DraftRequest) bool {
+		return r.Source == "Notes feature\n\nAdd a scratch pad" && r.Current == "# Feature Discovery: v1"
+	}), mock.Anything).Return(&draft.Result{Body: "# Feature Discovery: v2"}, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.DraftKind == "discovery" && m.Content == "# Feature Discovery: v2"
+	})).Return(nil).Once()
+
+	_, err := s.svc.Chat(context.Background(), "conv-d", "Add a scratch pad", func(string) error { return nil })
+	s.Require().NoError(err)
+}
+
+func (s *ConversationServiceTestSuite) TestChat_TicketsDraftIsStoredAsATable() {
+	s.convRepo.On("Get", mock.Anything, "conv-d").Return(s.draftingConv("tickets"), nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.msgRepo.On("ListByConversation", mock.Anything, "conv-d").Return([]*v1.Message{
+		{Uuid: "u1", Role: v1.MessageRole_MESSAGE_ROLE_USER, Content: "Build the API"},
+	}, nil)
+	s.drafter.On("Draft", mock.Anything, mock.Anything, mock.Anything).Return(&draft.Result{Tickets: []draft.Ticket{
+		{Title: "Add endpoint", Body: "Do it | now", AcceptanceCriteria: []string{"returns 201", "stores row"}},
+		{Title: "Docs", Body: "Write", DependsOn: []string{"Add endpoint"}},
+	}}, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		if m.DraftKind != "tickets" {
+			return false
+		}
+		got := draft.ParseProposedTickets(m.Content)
+		return len(got) == 2 && got[0].Title == "Add endpoint" && len(got[0].AcceptanceCriteria) == 2 &&
+			got[1].DependsOn[0] == "Add endpoint"
+	})).Return(nil).Once()
+
+	_, err := s.svc.Chat(context.Background(), "conv-d", "Build the API", func(string) error { return nil })
+	s.Require().NoError(err)
+}
+
+func (s *ConversationServiceTestSuite) TestChat_DraftFailureSavesNothing() {
+	s.convRepo.On("Get", mock.Anything, "conv-d").Return(s.draftingConv("design"), nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
+	})).Return(nil).Once()
+	s.msgRepo.On("ListByConversation", mock.Anything, "conv-d").Return([]*v1.Message{
+		{Uuid: "u1", Role: v1.MessageRole_MESSAGE_ROLE_USER, Content: "x"},
+	}, nil)
+	s.drafter.On("Draft", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("ollama down"))
+
+	_, err := s.svc.Chat(context.Background(), "conv-d", "x", func(string) error { return nil })
+	s.ErrorContains(err, "ollama down")
+}
+
+func (s *ConversationServiceTestSuite) TestRegenerate_DiscardsLatestDraftAndDraftsAgain() {
+	s.convRepo.On("Get", mock.Anything, "conv-d").Return(s.draftingConv("design"), nil)
+	s.msgRepo.On("ListByConversation", mock.Anything, "conv-d").Return([]*v1.Message{
+		{Uuid: "p", Role: v1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "What would you like to design?"},
+		{Uuid: "u1", Role: v1.MessageRole_MESSAGE_ROLE_USER, Content: "A tracker"},
+		{Uuid: "d1", Role: v1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "# Design: old", DraftKind: "design"},
+	}, nil)
+	s.msgRepo.On("Delete", mock.Anything, "d1").Return(nil).Once()
+	s.drafter.On("Draft", mock.Anything, mock.MatchedBy(func(r draft.DraftRequest) bool {
+		return r.Source == "A tracker" && r.Current == ""
+	}), mock.Anything).Return(&draft.Result{Body: "# Design: new"}, nil)
+	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
+		return m.Content == "# Design: new" && m.DraftKind == "design"
+	})).Return(nil).Once()
+
+	msg, err := s.svc.Regenerate(context.Background(), "conv-d", func(string) error { return nil })
+	s.Require().NoError(err)
+	s.Equal("# Design: new", msg.GetContent())
+}
+
+func (s *ConversationServiceTestSuite) TestRegenerate_RejectsNonDraftConversations() {
+	s.convRepo.On("Get", mock.Anything, "conv-d").Return(s.draftingConv("research"), nil)
+
+	_, err := s.svc.Regenerate(context.Background(), "conv-d", func(string) error { return nil })
+	s.Error(err)
 }
 
 func (s *ConversationServiceTestSuite) TestUpdate() {
@@ -207,7 +401,7 @@ func (s *ConversationServiceTestSuite) TestChat_CacheHit() {
 	s.T().Skip("cache temporarily disabled — re-enable after fixing per-query keying strategy")
 	cache := mocks.NewMockResourceCache(s.T())
 	svc := conversation.NewConversationService(
-		s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, cache, zap.NewNop(), nil,
+		s.convRepo, s.msgRepo, s.searcher, s.types, s.drafter, nil, s.llm, cache, zap.NewNop(), nil,
 	)
 
 	convUUID := "conv-cache-hit"
@@ -240,7 +434,7 @@ func (s *ConversationServiceTestSuite) TestChat_CacheMiss() {
 	s.T().Skip("cache temporarily disabled — re-enable after fixing per-query keying strategy")
 	cache := mocks.NewMockResourceCache(s.T())
 	svc := conversation.NewConversationService(
-		s.convRepo, s.msgRepo, s.searcher, s.roleRepo, s.llm, cache, zap.NewNop(), nil,
+		s.convRepo, s.msgRepo, s.searcher, s.types, s.drafter, nil, s.llm, cache, zap.NewNop(), nil,
 	)
 
 	convUUID := "conv-cache-miss"

@@ -25,7 +25,7 @@ func (r *MessageRepo) Create(ctx context.Context, b *greysealv1.Message) error {
 		resourceUUIDs = []string{}
 	}
 	_, err := sq.StatementBuilder.PlaceholderFormat(sq.Dollar).Insert("messages").
-		Columns("uuid", "conversation_uuid", "role", "content", "resource_uuids", "feedback", "created_at").
+		Columns("uuid", "conversation_uuid", "role", "content", "resource_uuids", "feedback", "created_at", "draft_kind", "kept_ref").
 		Values(
 			b.Uuid,
 			b.ConversationUuid,
@@ -33,7 +33,9 @@ func (r *MessageRepo) Create(ctx context.Context, b *greysealv1.Message) error {
 			b.Content,
 			pq.Array(resourceUUIDs),
 			b.Feedback,
-			b.CreatedAt.AsTime()).
+			b.CreatedAt.AsTime(),
+			b.DraftKind,
+			b.KeptRef).
 		RunWith(r.conn).Exec()
 	return err
 }
@@ -48,6 +50,8 @@ func (r *MessageRepo) Update(ctx context.Context, id string, b *greysealv1.Messa
 		Set("content", b.Content).
 		Set("resource_uuids", pq.Array(resourceUUIDs)).
 		Set("feedback", b.Feedback).
+		Set("draft_kind", b.DraftKind).
+		Set("kept_ref", b.KeptRef).
 		Where(sq.Eq{"uuid": id}).
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
@@ -76,7 +80,7 @@ func (r *MessageRepo) Get(ctx context.Context, id string) (*greysealv1.Message, 
 	var createdAtDt time.Time
 	err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
-		Select("uuid", "conversation_uuid", "role", "content", "resource_uuids", "feedback", "created_at").
+		Select("uuid", "conversation_uuid", "role", "content", "resource_uuids", "feedback", "created_at", "draft_kind", "kept_ref").
 		From("messages").
 		Where(sq.Eq{"uuid": id}).
 		RunWith(r.conn).
@@ -89,6 +93,8 @@ func (r *MessageRepo) Get(ctx context.Context, id string) (*greysealv1.Message, 
 			pq.Array(&message.ResourceUuids),
 			&message.Feedback,
 			&createdAtDt,
+			&message.DraftKind,
+			&message.KeptRef,
 		)
 	if err != nil {
 		fmt.Println("error getting message", err)
@@ -102,7 +108,7 @@ func (r *MessageRepo) Get(ctx context.Context, id string) (*greysealv1.Message, 
 func (r *MessageRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*greysealv1.Message, error) {
 	q := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
-		Select("uuid", "conversation_uuid", "role", "content", "resource_uuids", "feedback", "created_at").
+		Select("uuid", "conversation_uuid", "role", "content", "resource_uuids", "feedback", "created_at", "draft_kind", "kept_ref").
 		From("messages").
 		OrderBy("created_at ASC")
 
@@ -130,6 +136,8 @@ func (r *MessageRepo) List(ctx context.Context, cursor string, limit uint, filte
 			pq.Array(&message.ResourceUuids),
 			&message.Feedback,
 			&createdAtDt,
+			&message.DraftKind,
+			&message.KeptRef,
 		)
 		if err != nil {
 			fmt.Println("error scanning message", err)
@@ -183,11 +191,11 @@ func (r *ConversationRepo) Create(ctx context.Context, b *greysealv1.Conversatio
 		resourceUUIDs = []string{}
 	}
 	_, err := sq.StatementBuilder.PlaceholderFormat(sq.Dollar).Insert("conversations").
-		Columns("uuid", "title", "role_uuid", "resource_uuids", "summary", "created_at", "updated_at").
+		Columns("uuid", "title", "work_type", "resource_uuids", "summary", "created_at", "updated_at").
 		Values(
 			b.Uuid,
 			b.Title,
-			b.RoleUuid,
+			b.WorkType,
 			pq.Array(resourceUUIDs),
 			b.Summary,
 			b.CreatedAt.AsTime(),
@@ -203,7 +211,7 @@ func (r *ConversationRepo) Update(ctx context.Context, id string, b *greysealv1.
 	}
 	query, args, err := sq.Update("conversations").
 		Set("title", b.Title).
-		Set("role_uuid", b.RoleUuid).
+		Set("work_type", sq.Expr("COALESCE(NULLIF(?, ''), work_type)", b.WorkType)).
 		Set("resource_uuids", pq.Array(resourceUUIDs)).
 		Set("summary", b.Summary).
 		Set("updated_at", b.UpdatedAt.AsTime()).
@@ -235,7 +243,7 @@ func (r *ConversationRepo) Get(ctx context.Context, id string) (*greysealv1.Conv
 	var updatedAtDt time.Time
 	err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
-		Select("uuid", "title", "role_uuid", "resource_uuids", "summary", "created_at", "updated_at").
+		Select("uuid", "title", "work_type", "resource_uuids", "summary", "created_at", "updated_at").
 		From("conversations").
 		Where(sq.Eq{"uuid": id}).
 		RunWith(r.conn).
@@ -243,7 +251,7 @@ func (r *ConversationRepo) Get(ctx context.Context, id string) (*greysealv1.Conv
 		Scan(
 			&conversation.Uuid,
 			&conversation.Title,
-			&conversation.RoleUuid,
+			&conversation.WorkType,
 			pq.Array(&conversation.ResourceUuids),
 			&conversation.Summary,
 			&createdAtDt,
@@ -267,7 +275,7 @@ func (r *ConversationRepo) Get(ctx context.Context, id string) (*greysealv1.Conv
 func (r *ConversationRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*greysealv1.Conversation, error) {
 	rows, err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
-		Select("uuid", "title", "role_uuid", "resource_uuids", "summary", "created_at", "updated_at").
+		Select("uuid", "title", "work_type", "resource_uuids", "summary", "created_at", "updated_at").
 		From("conversations").
 		OrderBy("updated_at DESC").
 		RunWith(r.conn).
@@ -286,7 +294,7 @@ func (r *ConversationRepo) List(ctx context.Context, cursor string, limit uint, 
 		err := rows.Scan(
 			&conversation.Uuid,
 			&conversation.Title,
-			&conversation.RoleUuid,
+			&conversation.WorkType,
 			pq.Array(&conversation.ResourceUuids),
 			&conversation.Summary,
 			&createdAtDt,
