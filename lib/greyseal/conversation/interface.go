@@ -20,6 +20,11 @@ type ConversationService interface {
 	// The fully-populated assistant Message is returned when streaming completes.
 	Chat(ctx context.Context, conversationUUID string, content string, stream func(token string) error) (*greysealv1.Message, error)
 
+	// Regenerate discards the conversation's latest draft and drafts again
+	// from the same input (Retry). It errors when the conversation's work
+	// type does not produce drafts.
+	Regenerate(ctx context.Context, conversationUUID string, stream func(token string) error) (*greysealv1.Message, error)
+
 	// SubmitFeedback records user feedback (-1/0/1) on an assistant message.
 	SubmitFeedback(ctx context.Context, messageUUID string, feedback int32) error
 }

@@ -510,8 +510,11 @@ type ChatRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	ConversationUuid string                 `protobuf:"bytes,1,opt,name=conversation_uuid,json=conversationUuid,proto3" json:"conversation_uuid,omitempty"`
 	Content          string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// regenerate discards the latest draft and drafts again from the same
+	// input (Retry). content is ignored.
+	Regenerate    bool `protobuf:"varint,3,opt,name=regenerate,proto3" json:"regenerate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ChatRequest) Reset() {
@@ -556,6 +559,13 @@ func (x *ChatRequest) GetContent() string {
 		return x.Content
 	}
 	return ""
+}
+
+func (x *ChatRequest) GetRegenerate() bool {
+	if x != nil {
+		return x.Regenerate
+	}
+	return false
 }
 
 // ChatResponse is streamed; each message carries one token or chunk of content.
@@ -735,10 +745,13 @@ const file_schemas_greyseal_v1_services_conversation_proto_rawDesc = "" +
 	"\x04data\x18\x01 \x01(\v2!.schemas.greyseal.v1.ConversationR\x04data\"/\n" +
 	"\x19DeleteConversationRequest\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\"\x1c\n" +
-	"\x1aDeleteConversationResponse\"T\n" +
+	"\x1aDeleteConversationResponse\"t\n" +
 	"\vChatRequest\x12+\n" +
 	"\x11conversation_uuid\x18\x01 \x01(\tR\x10conversationUuid\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\"g\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\x12\x1e\n" +
+	"\n" +
+	"regenerate\x18\x03 \x01(\bR\n" +
+	"regenerate\"g\n" +
 	"\fChatResponse\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12A\n" +
 	"\rfinal_message\x18\x02 \x01(\v2\x1c.schemas.greyseal.v1.MessageR\ffinalMessage\"V\n" +

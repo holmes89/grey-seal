@@ -76,11 +76,18 @@ func (h *ConversationHandler) DeleteConversation(ctx context.Context, req *conne
 
 // Chat streams assistant tokens back to the client as they are generated.
 func (h *ConversationHandler) Chat(ctx context.Context, req *connect.Request[services.ChatRequest], stream *connect.ServerStream[services.ChatResponse]) error {
-	finalMsg, err := h.svc.Chat(ctx, req.Msg.GetConversationUuid(), req.Msg.GetContent(),
-		func(token string) error {
-			return stream.Send(&services.ChatResponse{Token: token})
-		},
+	send := func(token string) error {
+		return stream.Send(&services.ChatResponse{Token: token})
+	}
+	var (
+		finalMsg *greysealv1.Message
+		err      error
 	)
+	if req.Msg.GetRegenerate() {
+		finalMsg, err = h.svc.Regenerate(ctx, req.Msg.GetConversationUuid(), send)
+	} else {
+		finalMsg, err = h.svc.Chat(ctx, req.Msg.GetConversationUuid(), req.Msg.GetContent(), send)
+	}
 	if err != nil {
 		return err
 	}

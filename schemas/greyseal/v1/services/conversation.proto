@@ -74,6 +74,9 @@ message DeleteConversationResponse {}
 message ChatRequest {
   string conversation_uuid = 1;
   string content = 2;
+  // regenerate discards the latest draft and drafts again from the same
+  // input (Retry). content is ignored.
+  bool regenerate = 3;
 }
 
 // ChatResponse is streamed; each message carries one token or chunk of content.

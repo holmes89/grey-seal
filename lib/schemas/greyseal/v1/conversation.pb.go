@@ -82,8 +82,14 @@ type Message struct {
 	// this response (populated for ASSISTANT messages).
 	ResourceUuids []string `protobuf:"bytes,5,rep,name=resource_uuids,json=resourceUuids,proto3" json:"resource_uuids,omitempty"`
 	// feedback allows simple quality tracking: -1 negative, 0 neutral, 1 positive.
-	Feedback      int32                  `protobuf:"varint,6,opt,name=feedback,proto3" json:"feedback,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Feedback  int32                  `protobuf:"varint,6,opt,name=feedback,proto3" json:"feedback,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// draft_kind is set (discovery, design, tickets) on assistant messages that
+	// are drafts the user can keep or retry; empty for ordinary messages.
+	DraftKind string `protobuf:"bytes,8,opt,name=draft_kind,json=draftKind,proto3" json:"draft_kind,omitempty"`
+	// kept_ref records where a kept draft was written, e.g. "design:<uuid>";
+	// empty until the draft is kept.
+	KeptRef       string `protobuf:"bytes,9,opt,name=kept_ref,json=keptRef,proto3" json:"kept_ref,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -165,6 +171,20 @@ func (x *Message) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *Message) GetDraftKind() string {
+	if x != nil {
+		return x.DraftKind
+	}
+	return ""
+}
+
+func (x *Message) GetKeptRef() string {
+	if x != nil {
+		return x.KeptRef
+	}
+	return ""
 }
 
 // Conversation is a chat session that persists and can be resumed.
@@ -280,7 +300,7 @@ var File_schemas_greyseal_v1_conversation_proto protoreflect.FileDescriptor
 
 const file_schemas_greyseal_v1_conversation_proto_rawDesc = "" +
 	"\n" +
-	"&schemas/greyseal/v1/conversation.proto\x12\x13schemas.greyseal.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x98\x02\n" +
+	"&schemas/greyseal/v1/conversation.proto\x12\x13schemas.greyseal.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd2\x02\n" +
 	"\aMessage\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12+\n" +
 	"\x11conversation_uuid\x18\x02 \x01(\tR\x10conversationUuid\x124\n" +
@@ -289,7 +309,10 @@ const file_schemas_greyseal_v1_conversation_proto_rawDesc = "" +
 	"\x0eresource_uuids\x18\x05 \x03(\tR\rresourceUuids\x12\x1a\n" +
 	"\bfeedback\x18\x06 \x01(\x05R\bfeedback\x129\n" +
 	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xd7\x02\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"draft_kind\x18\b \x01(\tR\tdraftKind\x12\x19\n" +
+	"\bkept_ref\x18\t \x01(\tR\akeptRef\"\xd7\x02\n" +
 	"\fConversation\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12%\n" +

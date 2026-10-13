@@ -23,6 +23,12 @@ message Message {
   // feedback allows simple quality tracking: -1 negative, 0 neutral, 1 positive.
   int32 feedback = 6;
   google.protobuf.Timestamp created_at = 7;
+  // draft_kind is set (discovery, design, tickets) on assistant messages that
+  // are drafts the user can keep or retry; empty for ordinary messages.
+  string draft_kind = 8;
+  // kept_ref records where a kept draft was written, e.g. "design:<uuid>";
+  // empty until the draft is kept.
+  string kept_ref = 9;
 }
 
 // Conversation is a chat session that persists and can be resumed.

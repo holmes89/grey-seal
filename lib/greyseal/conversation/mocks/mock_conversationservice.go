@@ -62,6 +62,14 @@ func (_m *MockConversationService) Chat(ctx context.Context, conversationUUID st
 	return ret.Get(0).(*v1.Message), ret.Error(1)
 }
 
+func (_m *MockConversationService) Regenerate(ctx context.Context, conversationUUID string, stream func(token string) error) (*v1.Message, error) {
+	ret := _m.Called(ctx, conversationUUID, stream)
+	if ret.Get(0) == nil {
+		return nil, ret.Error(1)
+	}
+	return ret.Get(0).(*v1.Message), ret.Error(1)
+}
+
 func (_m *MockConversationService) SubmitFeedback(ctx context.Context, messageUUID string, feedback int32) error {
 	ret := _m.Called(ctx, messageUUID, feedback)
 	return ret.Error(0)

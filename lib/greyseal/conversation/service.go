@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/holmes89/archaea/base"
+	"github.com/holmes89/grey-seal/lib/greyseal/draft"
 	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
 	greysealv1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"go.uber.org/zap"
@@ -31,11 +32,12 @@ type LLMMessage struct {
 type conversationService struct {
 	conversationRepo base.Repository[*greysealv1.Conversation]
 	messageRepo      MessageRepository
-	searcher         Searcher          // optional
-	workTypes        worktype.Registry // optional; nil = every conversation is plain chat
-	llm              LLM               // optional
-	cache            ResourceCache     // optional; disables per-conversation snippet caching when nil
-	transcriptWriter TranscriptWriter  // optional; nil = no transcript
+	searcher         Searcher           // optional
+	workTypes        worktype.Registry  // optional; nil = every conversation is plain chat
+	drafter          draft.DraftService // optional; nil = drafting work types fall back to plain chat
+	llm              LLM                // optional
+	cache            ResourceCache      // optional; disables per-conversation snippet caching when nil
+	transcriptWriter TranscriptWriter   // optional; nil = no transcript
 	logger           *zap.Logger
 }
 
@@ -44,6 +46,7 @@ func NewConversationService(
 	messageRepo MessageRepository,
 	searcher Searcher,
 	workTypes worktype.Registry,
+	drafter draft.DraftService,
 	llm LLM,
 	cache ResourceCache,
 	logger *zap.Logger,
@@ -54,6 +57,7 @@ func NewConversationService(
 		messageRepo:      messageRepo,
 		searcher:         searcher,
 		workTypes:        workTypes,
+		drafter:          drafter,
 		llm:              llm,
 		cache:            cache,
 		transcriptWriter: transcriptWriter,
@@ -160,6 +164,11 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	// Still waiting for the user to pick a work type: answer without the LLM.
 	if conv.WorkType == worktype.Pending && srv.workTypes != nil {
 		return srv.selectWorkType(ctx, conv, content, stream)
+	}
+
+	// Drafting work types answer through the draft templates, not free chat.
+	if wt, ok := srv.workType(conv.WorkType); ok && wt.DraftKind != "" && srv.drafter != nil {
+		return srv.draftReply(ctx, conv, wt, false, stream)
 	}
 
 	// Default system prompt establishes the assistant persona.
