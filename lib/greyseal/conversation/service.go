@@ -35,6 +35,7 @@ type conversationService struct {
 	searcher         Searcher           // optional
 	workTypes        worktype.Registry  // optional; nil = every conversation is plain chat
 	drafter          draft.DraftService // optional; nil = drafting work types fall back to plain chat
+	remora           RemoraWriter       // optional; nil = KeepDraft is unavailable
 	llm              LLM                // optional
 	cache            ResourceCache      // optional; disables per-conversation snippet caching when nil
 	transcriptWriter TranscriptWriter   // optional; nil = no transcript
@@ -47,6 +48,7 @@ func NewConversationService(
 	searcher Searcher,
 	workTypes worktype.Registry,
 	drafter draft.DraftService,
+	remora RemoraWriter,
 	llm LLM,
 	cache ResourceCache,
 	logger *zap.Logger,
@@ -58,6 +60,7 @@ func NewConversationService(
 		searcher:         searcher,
 		workTypes:        workTypes,
 		drafter:          drafter,
+		remora:           remora,
 		llm:              llm,
 		cache:            cache,
 		transcriptWriter: transcriptWriter,

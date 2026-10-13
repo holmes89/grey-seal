@@ -149,6 +149,34 @@ func (s *ConversationRepoTestSuite) TestList() {
 	s.GreaterOrEqual(len(list), 3)
 }
 
+func (s *ConversationRepoTestSuite) TestMessageDraftFieldsRoundTrip() {
+	ctx := context.Background()
+	s.Require().NoError(s.conv.Create(ctx, &v1.Conversation{
+		Uuid: convUUID1, Title: "Drafts", CreatedAt: timestamppb.New(time.Now()), UpdatedAt: timestamppb.New(time.Now()),
+	}))
+	msgs := &repo.MessageRepo{Conn: s.db}
+	m := &v1.Message{
+		Uuid: "00000000-0000-0000-0000-0000000000a1", ConversationUuid: convUUID1,
+		Role: v1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "# Design: X", DraftKind: "design",
+		CreatedAt: timestamppb.New(time.Now()),
+	}
+	s.Require().NoError(msgs.Create(ctx, m))
+
+	got, err := msgs.Get(ctx, m.Uuid)
+	s.Require().NoError(err)
+	s.Equal("design", got.GetDraftKind())
+	s.Empty(got.GetKeptRef())
+
+	got.KeptRef = "design:abc"
+	s.Require().NoError(msgs.Update(ctx, m.Uuid, got))
+
+	list, err := msgs.ListByConversation(ctx, convUUID1)
+	s.Require().NoError(err)
+	s.Require().Len(list, 1)
+	s.Equal("design", list[0].GetDraftKind())
+	s.Equal("design:abc", list[0].GetKeptRef())
+}
+
 func TestConversationRepoTestSuite(t *testing.T) {
 	suite.Run(t, new(ConversationRepoTestSuite))
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/holmes89/archaea/base"
 	mock "github.com/stretchr/testify/mock"
 
+	"github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 )
 
@@ -64,6 +65,14 @@ func (_m *MockConversationService) Chat(ctx context.Context, conversationUUID st
 
 func (_m *MockConversationService) Regenerate(ctx context.Context, conversationUUID string, stream func(token string) error) (*v1.Message, error) {
 	ret := _m.Called(ctx, conversationUUID, stream)
+	if ret.Get(0) == nil {
+		return nil, ret.Error(1)
+	}
+	return ret.Get(0).(*v1.Message), ret.Error(1)
+}
+
+func (_m *MockConversationService) KeepDraft(ctx context.Context, in conversation.KeepDraftInput) (*v1.Message, error) {
+	ret := _m.Called(ctx, in)
 	if ret.Get(0) == nil {
 		return nil, ret.Error(1)
 	}

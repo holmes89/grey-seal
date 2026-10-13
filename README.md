@@ -4,12 +4,12 @@
 
 *Logo: [Halichoerus grypus He3](https://commons.wikimedia.org/wiki/File:Halichoerus_grypus_He3.jpg) by Andreas Trepte, CC BY-SA 2.5 via Wikimedia Commons*
 
-Grey Seal is a self-hosted Retrieval-Augmented Generation (RAG) chat backend written in Go. It manages **conversations**, **roles** (system prompts), and **resources** (indexed documents), and answers user queries grounded in a knowledge base it indexes itself. At runtime it wires together a PostgreSQL store, an Ollama LLM, and an external vector-search service called **shrike**; the LLM runs locally and the data never leaves the network.
+Grey Seal is a self-hosted Retrieval-Augmented Generation (RAG) chat backend written in Go. It manages **conversations**, **work types** (yaml-defined kinds of work such as design, discovery and tickets), and **resources** (indexed documents), and answers user queries grounded in a knowledge base it indexes itself. At runtime it wires together a PostgreSQL store, an Ollama LLM, and an external vector-search service called **shrike**; the LLM runs locally and the data never leaves the network.
 
 ## What It Does
 
 - Streaming chat via a Connect-RPC server-streaming RPC (`Chat`), retrieving relevant context from **shrike** and injecting it into the LLM prompt
-- Role-based system prompts that can be assigned per conversation
+- Guided new chats: a welcome message picks a work type (design, discovery, tickets, research, something else); drafting types answer through templates, can be retried, and can be kept by writing to Remora
 - Resource scoping: a conversation can restrict retrieval to a named set of indexed documents
 - Message-level feedback recording (-1 / 0 / 1)
 - Automatic schema migrations using goose (embedded in the binary)
@@ -47,6 +47,8 @@ The compose file starts PostgreSQL, Qdrant, Ollama, Redpanda, the API server, an
 |---|---|---|
 | `DATABASE_URL` | _(required)_ | PostgreSQL connection string |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama base URL |
+| `WORKTYPES_DIR` | _(unset)_ | Directory of `*.yaml` work types layered over the embedded defaults (same `id` replaces a default, a new `id` adds one) |
+| `REMORA_MCP_URL` | _(unset)_ | Remora MCP endpoint; enables Keep on chat drafts |
 | `OLLAMA_CHAT_MODEL` | `deepseek-r1` | Model name for chat completions |
 | `SHRIKE_URL` | `http://shrike:9000` | Vector search service URL |
 | `LITELLM_BASE_URL` | _(unset)_ | LiteLLM Proxy base URL — the agent service route is disabled entirely if unset |
@@ -111,7 +113,8 @@ cmd/
 lib/
   greyseal/
     conversation/ – Chat domain: service, interfaces, gRPC handler
-    role/         – Role domain: service, interfaces, gRPC handler
+    worktype/     – Yaml work types (embedded defaults + WORKTYPES_DIR), registry, ListWorkTypes handler
+    draft/        – Template-driven document drafting (discovery, design, tickets, proto)
   repo/           – PostgreSQL repository implementations + goose migrations
   repo/ollama/    – Ollama LLM adapter
   schemas/        – Generated protobuf + Connect-RPC Go code

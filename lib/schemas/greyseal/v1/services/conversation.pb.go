@@ -624,6 +624,130 @@ func (x *ChatResponse) GetFinalMessage() *v1.Message {
 	return nil
 }
 
+type KeepDraftRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ConversationUuid string                 `protobuf:"bytes,1,opt,name=conversation_uuid,json=conversationUuid,proto3" json:"conversation_uuid,omitempty"`
+	MessageUuid      string                 `protobuf:"bytes,2,opt,name=message_uuid,json=messageUuid,proto3" json:"message_uuid,omitempty"`
+	// project_uuid is the Remora project a design or tickets draft is created in.
+	ProjectUuid string `protobuf:"bytes,3,opt,name=project_uuid,json=projectUuid,proto3" json:"project_uuid,omitempty"`
+	// product_uuid is the Remora product a discovery draft is created under.
+	ProductUuid string `protobuf:"bytes,4,opt,name=product_uuid,json=productUuid,proto3" json:"product_uuid,omitempty"`
+	// design_uuid optionally links kept tickets to a design.
+	DesignUuid    string `protobuf:"bytes,5,opt,name=design_uuid,json=designUuid,proto3" json:"design_uuid,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KeepDraftRequest) Reset() {
+	*x = KeepDraftRequest{}
+	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KeepDraftRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KeepDraftRequest) ProtoMessage() {}
+
+func (x *KeepDraftRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KeepDraftRequest.ProtoReflect.Descriptor instead.
+func (*KeepDraftRequest) Descriptor() ([]byte, []int) {
+	return file_schemas_greyseal_v1_services_conversation_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *KeepDraftRequest) GetConversationUuid() string {
+	if x != nil {
+		return x.ConversationUuid
+	}
+	return ""
+}
+
+func (x *KeepDraftRequest) GetMessageUuid() string {
+	if x != nil {
+		return x.MessageUuid
+	}
+	return ""
+}
+
+func (x *KeepDraftRequest) GetProjectUuid() string {
+	if x != nil {
+		return x.ProjectUuid
+	}
+	return ""
+}
+
+func (x *KeepDraftRequest) GetProductUuid() string {
+	if x != nil {
+		return x.ProductUuid
+	}
+	return ""
+}
+
+func (x *KeepDraftRequest) GetDesignUuid() string {
+	if x != nil {
+		return x.DesignUuid
+	}
+	return ""
+}
+
+type KeepDraftResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// data is the draft message with kept_ref set.
+	Data          *v1.Message `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KeepDraftResponse) Reset() {
+	*x = KeepDraftResponse{}
+	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KeepDraftResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KeepDraftResponse) ProtoMessage() {}
+
+func (x *KeepDraftResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KeepDraftResponse.ProtoReflect.Descriptor instead.
+func (*KeepDraftResponse) Descriptor() ([]byte, []int) {
+	return file_schemas_greyseal_v1_services_conversation_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *KeepDraftResponse) GetData() *v1.Message {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
 type SubmitFeedbackRequest struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	MessageUuid string                 `protobuf:"bytes,1,opt,name=message_uuid,json=messageUuid,proto3" json:"message_uuid,omitempty"`
@@ -635,7 +759,7 @@ type SubmitFeedbackRequest struct {
 
 func (x *SubmitFeedbackRequest) Reset() {
 	*x = SubmitFeedbackRequest{}
-	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[12]
+	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -647,7 +771,7 @@ func (x *SubmitFeedbackRequest) String() string {
 func (*SubmitFeedbackRequest) ProtoMessage() {}
 
 func (x *SubmitFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[12]
+	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -660,7 +784,7 @@ func (x *SubmitFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*SubmitFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_schemas_greyseal_v1_services_conversation_proto_rawDescGZIP(), []int{12}
+	return file_schemas_greyseal_v1_services_conversation_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SubmitFeedbackRequest) GetMessageUuid() string {
@@ -685,7 +809,7 @@ type SubmitFeedbackResponse struct {
 
 func (x *SubmitFeedbackResponse) Reset() {
 	*x = SubmitFeedbackResponse{}
-	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[13]
+	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -697,7 +821,7 @@ func (x *SubmitFeedbackResponse) String() string {
 func (*SubmitFeedbackResponse) ProtoMessage() {}
 
 func (x *SubmitFeedbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[13]
+	mi := &file_schemas_greyseal_v1_services_conversation_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -710,7 +834,7 @@ func (x *SubmitFeedbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitFeedbackResponse.ProtoReflect.Descriptor instead.
 func (*SubmitFeedbackResponse) Descriptor() ([]byte, []int) {
-	return file_schemas_greyseal_v1_services_conversation_proto_rawDescGZIP(), []int{13}
+	return file_schemas_greyseal_v1_services_conversation_proto_rawDescGZIP(), []int{15}
 }
 
 var File_schemas_greyseal_v1_services_conversation_proto protoreflect.FileDescriptor
@@ -754,18 +878,28 @@ const file_schemas_greyseal_v1_services_conversation_proto_rawDesc = "" +
 	"regenerate\"g\n" +
 	"\fChatResponse\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12A\n" +
-	"\rfinal_message\x18\x02 \x01(\v2\x1c.schemas.greyseal.v1.MessageR\ffinalMessage\"V\n" +
+	"\rfinal_message\x18\x02 \x01(\v2\x1c.schemas.greyseal.v1.MessageR\ffinalMessage\"\xc9\x01\n" +
+	"\x10KeepDraftRequest\x12+\n" +
+	"\x11conversation_uuid\x18\x01 \x01(\tR\x10conversationUuid\x12!\n" +
+	"\fmessage_uuid\x18\x02 \x01(\tR\vmessageUuid\x12!\n" +
+	"\fproject_uuid\x18\x03 \x01(\tR\vprojectUuid\x12!\n" +
+	"\fproduct_uuid\x18\x04 \x01(\tR\vproductUuid\x12\x1f\n" +
+	"\vdesign_uuid\x18\x05 \x01(\tR\n" +
+	"designUuid\"E\n" +
+	"\x11KeepDraftResponse\x120\n" +
+	"\x04data\x18\x01 \x01(\v2\x1c.schemas.greyseal.v1.MessageR\x04data\"V\n" +
 	"\x15SubmitFeedbackRequest\x12!\n" +
 	"\fmessage_uuid\x18\x01 \x01(\tR\vmessageUuid\x12\x1a\n" +
 	"\bfeedback\x18\x02 \x01(\x05R\bfeedback\"\x18\n" +
-	"\x16SubmitFeedbackResponse2\xa7\a\n" +
+	"\x16SubmitFeedbackResponse2\x97\b\n" +
 	"\x13ConversationService\x12\x89\x01\n" +
 	"\x12CreateConversation\x127.schemas.greyseal.services.v1.CreateConversationRequest\x1a8.schemas.greyseal.services.v1.CreateConversationResponse\"\x00\x12\x80\x01\n" +
 	"\x0fGetConversation\x124.schemas.greyseal.services.v1.GetConversationRequest\x1a5.schemas.greyseal.services.v1.GetConversationResponse\"\x00\x12\x86\x01\n" +
 	"\x11ListConversations\x126.schemas.greyseal.services.v1.ListConversationsRequest\x1a7.schemas.greyseal.services.v1.ListConversationsResponse\"\x00\x12\x89\x01\n" +
 	"\x12UpdateConversation\x127.schemas.greyseal.services.v1.UpdateConversationRequest\x1a8.schemas.greyseal.services.v1.UpdateConversationResponse\"\x00\x12\x89\x01\n" +
 	"\x12DeleteConversation\x127.schemas.greyseal.services.v1.DeleteConversationRequest\x1a8.schemas.greyseal.services.v1.DeleteConversationResponse\"\x00\x12a\n" +
-	"\x04Chat\x12).schemas.greyseal.services.v1.ChatRequest\x1a*.schemas.greyseal.services.v1.ChatResponse\"\x000\x01\x12}\n" +
+	"\x04Chat\x12).schemas.greyseal.services.v1.ChatRequest\x1a*.schemas.greyseal.services.v1.ChatResponse\"\x000\x01\x12n\n" +
+	"\tKeepDraft\x12..schemas.greyseal.services.v1.KeepDraftRequest\x1a/.schemas.greyseal.services.v1.KeepDraftResponse\"\x00\x12}\n" +
 	"\x0eSubmitFeedback\x123.schemas.greyseal.services.v1.SubmitFeedbackRequest\x1a4.schemas.greyseal.services.v1.SubmitFeedbackResponse\"\x00B\x93\x02\n" +
 	" com.schemas.greyseal.services.v1B\x11ConversationProtoP\x01ZIgithub.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services;servicesv1\xa2\x02\x03SGS\xaa\x02\x1cSchemas.Greyseal.Services.V1\xca\x02\x1cSchemas\\Greyseal\\Services\\V1\xe2\x02(Schemas\\Greyseal\\Services\\V1\\GPBMetadata\xea\x02\x1fSchemas::Greyseal::Services::V1b\x06proto3"
 
@@ -781,7 +915,7 @@ func file_schemas_greyseal_v1_services_conversation_proto_rawDescGZIP() []byte {
 	return file_schemas_greyseal_v1_services_conversation_proto_rawDescData
 }
 
-var file_schemas_greyseal_v1_services_conversation_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_schemas_greyseal_v1_services_conversation_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_schemas_greyseal_v1_services_conversation_proto_goTypes = []any{
 	(*CreateConversationRequest)(nil),  // 0: schemas.greyseal.services.v1.CreateConversationRequest
 	(*CreateConversationResponse)(nil), // 1: schemas.greyseal.services.v1.CreateConversationResponse
@@ -795,36 +929,41 @@ var file_schemas_greyseal_v1_services_conversation_proto_goTypes = []any{
 	(*DeleteConversationResponse)(nil), // 9: schemas.greyseal.services.v1.DeleteConversationResponse
 	(*ChatRequest)(nil),                // 10: schemas.greyseal.services.v1.ChatRequest
 	(*ChatResponse)(nil),               // 11: schemas.greyseal.services.v1.ChatResponse
-	(*SubmitFeedbackRequest)(nil),      // 12: schemas.greyseal.services.v1.SubmitFeedbackRequest
-	(*SubmitFeedbackResponse)(nil),     // 13: schemas.greyseal.services.v1.SubmitFeedbackResponse
-	(*v1.Conversation)(nil),            // 14: schemas.greyseal.v1.Conversation
-	(*v1.Message)(nil),                 // 15: schemas.greyseal.v1.Message
+	(*KeepDraftRequest)(nil),           // 12: schemas.greyseal.services.v1.KeepDraftRequest
+	(*KeepDraftResponse)(nil),          // 13: schemas.greyseal.services.v1.KeepDraftResponse
+	(*SubmitFeedbackRequest)(nil),      // 14: schemas.greyseal.services.v1.SubmitFeedbackRequest
+	(*SubmitFeedbackResponse)(nil),     // 15: schemas.greyseal.services.v1.SubmitFeedbackResponse
+	(*v1.Conversation)(nil),            // 16: schemas.greyseal.v1.Conversation
+	(*v1.Message)(nil),                 // 17: schemas.greyseal.v1.Message
 }
 var file_schemas_greyseal_v1_services_conversation_proto_depIdxs = []int32{
-	14, // 0: schemas.greyseal.services.v1.CreateConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
-	14, // 1: schemas.greyseal.services.v1.GetConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
-	14, // 2: schemas.greyseal.services.v1.ListConversationsResponse.data:type_name -> schemas.greyseal.v1.Conversation
-	14, // 3: schemas.greyseal.services.v1.UpdateConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
-	15, // 4: schemas.greyseal.services.v1.ChatResponse.final_message:type_name -> schemas.greyseal.v1.Message
-	0,  // 5: schemas.greyseal.services.v1.ConversationService.CreateConversation:input_type -> schemas.greyseal.services.v1.CreateConversationRequest
-	2,  // 6: schemas.greyseal.services.v1.ConversationService.GetConversation:input_type -> schemas.greyseal.services.v1.GetConversationRequest
-	4,  // 7: schemas.greyseal.services.v1.ConversationService.ListConversations:input_type -> schemas.greyseal.services.v1.ListConversationsRequest
-	6,  // 8: schemas.greyseal.services.v1.ConversationService.UpdateConversation:input_type -> schemas.greyseal.services.v1.UpdateConversationRequest
-	8,  // 9: schemas.greyseal.services.v1.ConversationService.DeleteConversation:input_type -> schemas.greyseal.services.v1.DeleteConversationRequest
-	10, // 10: schemas.greyseal.services.v1.ConversationService.Chat:input_type -> schemas.greyseal.services.v1.ChatRequest
-	12, // 11: schemas.greyseal.services.v1.ConversationService.SubmitFeedback:input_type -> schemas.greyseal.services.v1.SubmitFeedbackRequest
-	1,  // 12: schemas.greyseal.services.v1.ConversationService.CreateConversation:output_type -> schemas.greyseal.services.v1.CreateConversationResponse
-	3,  // 13: schemas.greyseal.services.v1.ConversationService.GetConversation:output_type -> schemas.greyseal.services.v1.GetConversationResponse
-	5,  // 14: schemas.greyseal.services.v1.ConversationService.ListConversations:output_type -> schemas.greyseal.services.v1.ListConversationsResponse
-	7,  // 15: schemas.greyseal.services.v1.ConversationService.UpdateConversation:output_type -> schemas.greyseal.services.v1.UpdateConversationResponse
-	9,  // 16: schemas.greyseal.services.v1.ConversationService.DeleteConversation:output_type -> schemas.greyseal.services.v1.DeleteConversationResponse
-	11, // 17: schemas.greyseal.services.v1.ConversationService.Chat:output_type -> schemas.greyseal.services.v1.ChatResponse
-	13, // 18: schemas.greyseal.services.v1.ConversationService.SubmitFeedback:output_type -> schemas.greyseal.services.v1.SubmitFeedbackResponse
-	12, // [12:19] is the sub-list for method output_type
-	5,  // [5:12] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	16, // 0: schemas.greyseal.services.v1.CreateConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
+	16, // 1: schemas.greyseal.services.v1.GetConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
+	16, // 2: schemas.greyseal.services.v1.ListConversationsResponse.data:type_name -> schemas.greyseal.v1.Conversation
+	16, // 3: schemas.greyseal.services.v1.UpdateConversationResponse.data:type_name -> schemas.greyseal.v1.Conversation
+	17, // 4: schemas.greyseal.services.v1.ChatResponse.final_message:type_name -> schemas.greyseal.v1.Message
+	17, // 5: schemas.greyseal.services.v1.KeepDraftResponse.data:type_name -> schemas.greyseal.v1.Message
+	0,  // 6: schemas.greyseal.services.v1.ConversationService.CreateConversation:input_type -> schemas.greyseal.services.v1.CreateConversationRequest
+	2,  // 7: schemas.greyseal.services.v1.ConversationService.GetConversation:input_type -> schemas.greyseal.services.v1.GetConversationRequest
+	4,  // 8: schemas.greyseal.services.v1.ConversationService.ListConversations:input_type -> schemas.greyseal.services.v1.ListConversationsRequest
+	6,  // 9: schemas.greyseal.services.v1.ConversationService.UpdateConversation:input_type -> schemas.greyseal.services.v1.UpdateConversationRequest
+	8,  // 10: schemas.greyseal.services.v1.ConversationService.DeleteConversation:input_type -> schemas.greyseal.services.v1.DeleteConversationRequest
+	10, // 11: schemas.greyseal.services.v1.ConversationService.Chat:input_type -> schemas.greyseal.services.v1.ChatRequest
+	12, // 12: schemas.greyseal.services.v1.ConversationService.KeepDraft:input_type -> schemas.greyseal.services.v1.KeepDraftRequest
+	14, // 13: schemas.greyseal.services.v1.ConversationService.SubmitFeedback:input_type -> schemas.greyseal.services.v1.SubmitFeedbackRequest
+	1,  // 14: schemas.greyseal.services.v1.ConversationService.CreateConversation:output_type -> schemas.greyseal.services.v1.CreateConversationResponse
+	3,  // 15: schemas.greyseal.services.v1.ConversationService.GetConversation:output_type -> schemas.greyseal.services.v1.GetConversationResponse
+	5,  // 16: schemas.greyseal.services.v1.ConversationService.ListConversations:output_type -> schemas.greyseal.services.v1.ListConversationsResponse
+	7,  // 17: schemas.greyseal.services.v1.ConversationService.UpdateConversation:output_type -> schemas.greyseal.services.v1.UpdateConversationResponse
+	9,  // 18: schemas.greyseal.services.v1.ConversationService.DeleteConversation:output_type -> schemas.greyseal.services.v1.DeleteConversationResponse
+	11, // 19: schemas.greyseal.services.v1.ConversationService.Chat:output_type -> schemas.greyseal.services.v1.ChatResponse
+	13, // 20: schemas.greyseal.services.v1.ConversationService.KeepDraft:output_type -> schemas.greyseal.services.v1.KeepDraftResponse
+	15, // 21: schemas.greyseal.services.v1.ConversationService.SubmitFeedback:output_type -> schemas.greyseal.services.v1.SubmitFeedbackResponse
+	14, // [14:22] is the sub-list for method output_type
+	6,  // [6:14] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_schemas_greyseal_v1_services_conversation_proto_init() }
@@ -840,7 +979,7 @@ func file_schemas_greyseal_v1_services_conversation_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_schemas_greyseal_v1_services_conversation_proto_rawDesc), len(file_schemas_greyseal_v1_services_conversation_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

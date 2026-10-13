@@ -25,6 +25,12 @@ type ConversationService interface {
 	// type does not produce drafts.
 	Regenerate(ctx context.Context, conversationUUID string, stream func(token string) error) (*greysealv1.Message, error)
 
+	// KeepDraft writes a draft message to Remora (design, discovery doc or
+	// tickets) and records where it went on the message. It returns
+	// ErrKeepUnavailable when Remora is not configured and ErrKeepInvalid for
+	// caller mistakes.
+	KeepDraft(ctx context.Context, in KeepDraftInput) (*greysealv1.Message, error)
+
 	// SubmitFeedback records user feedback (-1/0/1) on an assistant message.
 	SubmitFeedback(ctx context.Context, messageUUID string, feedback int32) error
 }

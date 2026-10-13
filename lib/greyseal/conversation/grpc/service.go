@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"connectrpc.com/connect"
@@ -93,6 +94,25 @@ func (h *ConversationHandler) Chat(ctx context.Context, req *connect.Request[ser
 	}
 	// Send a final message with the fully-populated Message (uuid, references, etc.)
 	return stream.Send(&services.ChatResponse{FinalMessage: finalMsg})
+}
+
+func (h *ConversationHandler) KeepDraft(ctx context.Context, req *connect.Request[services.KeepDraftRequest]) (*connect.Response[services.KeepDraftResponse], error) {
+	msg, err := h.svc.KeepDraft(ctx, entity.KeepDraftInput{
+		ConversationUUID: req.Msg.GetConversationUuid(),
+		MessageUUID:      req.Msg.GetMessageUuid(),
+		ProjectUUID:      req.Msg.GetProjectUuid(),
+		ProductUUID:      req.Msg.GetProductUuid(),
+		DesignUUID:       req.Msg.GetDesignUuid(),
+	})
+	switch {
+	case errors.Is(err, entity.ErrKeepUnavailable):
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	case errors.Is(err, entity.ErrKeepInvalid):
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	case err != nil:
+		return nil, err
+	}
+	return connect.NewResponse(&services.KeepDraftResponse{Data: msg}), nil
 }
 
 func (h *ConversationHandler) SubmitFeedback(ctx context.Context, req *connect.Request[services.SubmitFeedbackRequest]) (*connect.Response[services.SubmitFeedbackResponse], error) {

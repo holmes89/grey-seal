@@ -31,6 +31,7 @@ import (
 	"github.com/holmes89/grey-seal/lib/repo/ollama"
 	"github.com/holmes89/grey-seal/lib/repo/ollamarunner"
 	"github.com/holmes89/grey-seal/lib/repo/ollamatools"
+	"github.com/holmes89/grey-seal/lib/repo/remoraclient"
 	"github.com/holmes89/grey-seal/lib/repo/transcript"
 	"github.com/holmes89/grey-seal/lib/schemas/greyseal/v1/services/servicesv1connect"
 	shrikev1 "github.com/holmes89/shrike/lib/schemas/shrike/v1/services"
@@ -138,12 +139,22 @@ func main() {
 	}
 	draftSvc := draftsvc.NewDraftService(ollama.NewDraftLLM(os.Getenv("OLLAMA_HOST"), draftModel), workTypes, logger)
 
+	// Kept chat drafts are written to Remora over MCP; without REMORA_MCP_URL
+	// the Keep action is reported as unavailable.
+	var remoraWriter conversationsvc.RemoraWriter
+	if mcpURL := os.Getenv("REMORA_MCP_URL"); mcpURL != "" {
+		remoraWriter = remoraclient.New(mcpclient.New(mcpURL, logger))
+	} else {
+		logger.Warn("REMORA_MCP_URL not set — keeping chat drafts is unavailable")
+	}
+
 	convSvc := conversationsvc.NewConversationService(
 		convRepo,
 		messageRepo,
 		searcher,
 		workTypes,
 		draftSvc,
+		remoraWriter,
 		ollamaLLM,
 		resourceCache,
 		logger,

@@ -51,6 +51,9 @@ const (
 	// ConversationServiceChatProcedure is the fully-qualified name of the ConversationService's Chat
 	// RPC.
 	ConversationServiceChatProcedure = "/schemas.greyseal.services.v1.ConversationService/Chat"
+	// ConversationServiceKeepDraftProcedure is the fully-qualified name of the ConversationService's
+	// KeepDraft RPC.
+	ConversationServiceKeepDraftProcedure = "/schemas.greyseal.services.v1.ConversationService/KeepDraft"
 	// ConversationServiceSubmitFeedbackProcedure is the fully-qualified name of the
 	// ConversationService's SubmitFeedback RPC.
 	ConversationServiceSubmitFeedbackProcedure = "/schemas.greyseal.services.v1.ConversationService/SubmitFeedback"
@@ -66,6 +69,8 @@ type ConversationServiceClient interface {
 	DeleteConversation(context.Context, *connect.Request[services.DeleteConversationRequest]) (*connect.Response[services.DeleteConversationResponse], error)
 	// Chat sends a user message and streams back the assistant response token by token.
 	Chat(context.Context, *connect.Request[services.ChatRequest]) (*connect.ServerStreamForClient[services.ChatResponse], error)
+	// KeepDraft writes a draft message to Remora and records where it went.
+	KeepDraft(context.Context, *connect.Request[services.KeepDraftRequest]) (*connect.Response[services.KeepDraftResponse], error)
 	// SubmitFeedback records user feedback on an assistant message.
 	SubmitFeedback(context.Context, *connect.Request[services.SubmitFeedbackRequest]) (*connect.Response[services.SubmitFeedbackResponse], error)
 }
@@ -118,6 +123,12 @@ func NewConversationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(conversationServiceMethods.ByName("Chat")),
 			connect.WithClientOptions(opts...),
 		),
+		keepDraft: connect.NewClient[services.KeepDraftRequest, services.KeepDraftResponse](
+			httpClient,
+			baseURL+ConversationServiceKeepDraftProcedure,
+			connect.WithSchema(conversationServiceMethods.ByName("KeepDraft")),
+			connect.WithClientOptions(opts...),
+		),
 		submitFeedback: connect.NewClient[services.SubmitFeedbackRequest, services.SubmitFeedbackResponse](
 			httpClient,
 			baseURL+ConversationServiceSubmitFeedbackProcedure,
@@ -135,6 +146,7 @@ type conversationServiceClient struct {
 	updateConversation *connect.Client[services.UpdateConversationRequest, services.UpdateConversationResponse]
 	deleteConversation *connect.Client[services.DeleteConversationRequest, services.DeleteConversationResponse]
 	chat               *connect.Client[services.ChatRequest, services.ChatResponse]
+	keepDraft          *connect.Client[services.KeepDraftRequest, services.KeepDraftResponse]
 	submitFeedback     *connect.Client[services.SubmitFeedbackRequest, services.SubmitFeedbackResponse]
 }
 
@@ -168,6 +180,11 @@ func (c *conversationServiceClient) Chat(ctx context.Context, req *connect.Reque
 	return c.chat.CallServerStream(ctx, req)
 }
 
+// KeepDraft calls schemas.greyseal.services.v1.ConversationService.KeepDraft.
+func (c *conversationServiceClient) KeepDraft(ctx context.Context, req *connect.Request[services.KeepDraftRequest]) (*connect.Response[services.KeepDraftResponse], error) {
+	return c.keepDraft.CallUnary(ctx, req)
+}
+
 // SubmitFeedback calls schemas.greyseal.services.v1.ConversationService.SubmitFeedback.
 func (c *conversationServiceClient) SubmitFeedback(ctx context.Context, req *connect.Request[services.SubmitFeedbackRequest]) (*connect.Response[services.SubmitFeedbackResponse], error) {
 	return c.submitFeedback.CallUnary(ctx, req)
@@ -183,6 +200,8 @@ type ConversationServiceHandler interface {
 	DeleteConversation(context.Context, *connect.Request[services.DeleteConversationRequest]) (*connect.Response[services.DeleteConversationResponse], error)
 	// Chat sends a user message and streams back the assistant response token by token.
 	Chat(context.Context, *connect.Request[services.ChatRequest], *connect.ServerStream[services.ChatResponse]) error
+	// KeepDraft writes a draft message to Remora and records where it went.
+	KeepDraft(context.Context, *connect.Request[services.KeepDraftRequest]) (*connect.Response[services.KeepDraftResponse], error)
 	// SubmitFeedback records user feedback on an assistant message.
 	SubmitFeedback(context.Context, *connect.Request[services.SubmitFeedbackRequest]) (*connect.Response[services.SubmitFeedbackResponse], error)
 }
@@ -230,6 +249,12 @@ func NewConversationServiceHandler(svc ConversationServiceHandler, opts ...conne
 		connect.WithSchema(conversationServiceMethods.ByName("Chat")),
 		connect.WithHandlerOptions(opts...),
 	)
+	conversationServiceKeepDraftHandler := connect.NewUnaryHandler(
+		ConversationServiceKeepDraftProcedure,
+		svc.KeepDraft,
+		connect.WithSchema(conversationServiceMethods.ByName("KeepDraft")),
+		connect.WithHandlerOptions(opts...),
+	)
 	conversationServiceSubmitFeedbackHandler := connect.NewUnaryHandler(
 		ConversationServiceSubmitFeedbackProcedure,
 		svc.SubmitFeedback,
@@ -250,6 +275,8 @@ func NewConversationServiceHandler(svc ConversationServiceHandler, opts ...conne
 			conversationServiceDeleteConversationHandler.ServeHTTP(w, r)
 		case ConversationServiceChatProcedure:
 			conversationServiceChatHandler.ServeHTTP(w, r)
+		case ConversationServiceKeepDraftProcedure:
+			conversationServiceKeepDraftHandler.ServeHTTP(w, r)
 		case ConversationServiceSubmitFeedbackProcedure:
 			conversationServiceSubmitFeedbackHandler.ServeHTTP(w, r)
 		default:
@@ -283,6 +310,10 @@ func (UnimplementedConversationServiceHandler) DeleteConversation(context.Contex
 
 func (UnimplementedConversationServiceHandler) Chat(context.Context, *connect.Request[services.ChatRequest], *connect.ServerStream[services.ChatResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ConversationService.Chat is not implemented"))
+}
+
+func (UnimplementedConversationServiceHandler) KeepDraft(context.Context, *connect.Request[services.KeepDraftRequest]) (*connect.Response[services.KeepDraftResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("schemas.greyseal.services.v1.ConversationService.KeepDraft is not implemented"))
 }
 
 func (UnimplementedConversationServiceHandler) SubmitFeedback(context.Context, *connect.Request[services.SubmitFeedbackRequest]) (*connect.Response[services.SubmitFeedbackResponse], error) {
