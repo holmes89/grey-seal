@@ -34,7 +34,7 @@ func (srv *conversationService) draftReply(ctx context.Context, conv *greysealv1
 	if !ok {
 		return nil, fmt.Errorf("work type %q has unsupported draft kind %q", wt.ID, wt.DraftKind)
 	}
-	history, err := srv.messageRepo.ListByConversation(ctx, conv.Uuid)
+	history, err := srv.history(ctx, conv.Uuid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load history: %w", err)
 	}
@@ -46,6 +46,7 @@ func (srv *conversationService) draftReply(ctx context.Context, conv *greysealv1
 			if err := srv.messageRepo.Delete(ctx, last.Uuid); err != nil {
 				return nil, fmt.Errorf("failed to discard draft: %w", err)
 			}
+			_ = srv.drafts.DeleteDraft(ctx, last.Uuid) // best effort: it expires anyway
 		}
 	} else if last := lastDraft(history); last != nil {
 		current = last.Content
@@ -91,8 +92,9 @@ func (srv *conversationService) finishDraft(ctx context.Context, conv *greysealv
 		DraftKind:        wt.DraftKind,
 		CreatedAt:        timestamppb.New(time.Now()),
 	}
-	if err := srv.messageRepo.Create(ctx, msg); err != nil {
-		return nil, fmt.Errorf("failed to save draft: %w", err)
+	msg, err = srv.storeDraft(ctx, msg)
+	if err != nil {
+		return nil, err
 	}
 
 	// Surface any open questions the template left in the draft as a

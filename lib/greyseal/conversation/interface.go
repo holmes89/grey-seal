@@ -107,3 +107,29 @@ type TranscriptTurn struct {
 type TranscriptWriter interface {
 	WriteTurn(ctx context.Context, turn TranscriptTurn) error
 }
+
+// ChainOffer is a pending proposal to move onto the next work type after a
+// draft is kept: the work type's id, and the kept draft's content, which
+// seeds the next draft.
+type ChainOffer struct {
+	WorkType string
+	Source   string
+}
+
+// DraftStore holds draft bodies and chain offers that have not been acted on
+// yet. Everything in it expires: an unkept draft is scratch work, and once
+// kept its body is saved on the (permanent) message instead. Implementations
+// live in lib/repo/draftstore.
+type DraftStore interface {
+	// PutDraft stores a draft message's body under the message uuid.
+	PutDraft(ctx context.Context, messageUUID, body string) error
+	// GetDraft returns the body, ok=false when it never existed or expired.
+	GetDraft(ctx context.Context, messageUUID string) (body string, ok bool, err error)
+	DeleteDraft(ctx context.Context, messageUUID string) error
+
+	// PutOffer records the conversation's pending chain offer, replacing any.
+	PutOffer(ctx context.Context, conversationUUID string, offer ChainOffer) error
+	// GetOffer returns the pending offer, ok=false when there is none.
+	GetOffer(ctx context.Context, conversationUUID string) (offer ChainOffer, ok bool, err error)
+	DeleteOffer(ctx context.Context, conversationUUID string) error
+}

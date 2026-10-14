@@ -48,6 +48,7 @@ The compose file starts PostgreSQL, Qdrant, Ollama, Redpanda, the API server, an
 | `DATABASE_URL` | _(required)_ | PostgreSQL connection string |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama base URL |
 | `WORKTYPES_DIR` | _(unset)_ | Directory of `*.yaml` work types layered over the embedded defaults (same `id` replaces a default, a new `id` adds one) |
+| `DRAFT_TTL` | `24h` | How long an unkept chat draft (and a pending "move onto the next step?" offer) lives. Kept drafts are saved permanently; expired ones show a note. Stored in Redis when `REDIS_URL` is set, otherwise in process memory (lost on restart) |
 | `REMORA_MCP_URL` | _(unset)_ | Remora MCP endpoint; enables Keep on chat drafts |
 | `OLLAMA_CHAT_MODEL` | `deepseek-r1` | Model name for chat completions |
 | `SHRIKE_URL` | `http://shrike:9000` | Vector search service URL |
