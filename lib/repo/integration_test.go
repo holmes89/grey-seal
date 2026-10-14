@@ -118,45 +118,6 @@ func (s *ConversationRepoTestSuite) TestWorkTypeSurvivesUpdatesThatOmitIt() {
 	s.Equal("tickets", got.GetWorkType())
 }
 
-func (s *ConversationRepoTestSuite) TestChainOfferPersistsAndClears() {
-	ctx := context.Background()
-	s.Require().NoError(s.conv.Create(ctx, &v1.Conversation{
-		Uuid: convUUID4, Title: "Chain", WorkType: "discovery",
-		CreatedAt: timestamppb.New(time.Now()), UpdatedAt: timestamppb.New(time.Now()),
-	}))
-
-	s.Require().NoError(s.conv.Update(ctx, convUUID4, &v1.Conversation{
-		Uuid: convUUID4, Title: "Chain", WorkType: "discovery",
-		PendingChainOffer: "design", PendingChainOfferSource: "# Feature Discovery: X",
-		UpdatedAt: timestamppb.New(time.Now()),
-	}))
-	got, err := s.conv.Get(ctx, convUUID4)
-	s.Require().NoError(err)
-	s.Equal("design", got.GetPendingChainOffer())
-	s.Equal("# Feature Discovery: X", got.GetPendingChainOfferSource())
-
-	list, err := s.conv.List(ctx, "", 10, nil)
-	s.Require().NoError(err)
-	var listed *v1.Conversation
-	for _, c := range list {
-		if c.GetUuid() == convUUID4 {
-			listed = c
-		}
-	}
-	s.Require().NotNil(listed)
-	s.Equal("design", listed.GetPendingChainOffer())
-
-	// An update that does not carry the offer clears it.
-	s.Require().NoError(s.conv.Update(ctx, convUUID4, &v1.Conversation{
-		Uuid: convUUID4, Title: "Chain", UpdatedAt: timestamppb.New(time.Now()),
-	}))
-	got, err = s.conv.Get(ctx, convUUID4)
-	s.Require().NoError(err)
-	s.Empty(got.GetPendingChainOffer())
-	s.Empty(got.GetPendingChainOfferSource())
-	s.Equal("discovery", got.GetWorkType(), "work type is kept when the update omits it")
-}
-
 func (s *ConversationRepoTestSuite) TestDelete() {
 	c := &v1.Conversation{
 		Uuid:      convUUID3,

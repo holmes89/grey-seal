@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/holmes89/archaea/server"
@@ -26,6 +27,7 @@ import (
 	"github.com/holmes89/grey-seal/lib/repo"
 	"github.com/holmes89/grey-seal/lib/repo/aiderrunner"
 	"github.com/holmes89/grey-seal/lib/repo/cache"
+	"github.com/holmes89/grey-seal/lib/repo/draftstore"
 	"github.com/holmes89/grey-seal/lib/repo/github"
 	"github.com/holmes89/grey-seal/lib/repo/mcpclient"
 	"github.com/holmes89/grey-seal/lib/repo/ollama"
@@ -112,9 +114,29 @@ func main() {
 
 	// Per-conversation resource cache (optional; requires REDIS_URL)
 	var resourceCache conversationsvc.ResourceCache
+	var rdb *redis.Client
 	if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
-		rdb := redis.NewClient(&redis.Options{Addr: redisURL})
+		rdb = redis.NewClient(&redis.Options{Addr: redisURL})
 		resourceCache = cache.NewRedisResourceCache(rdb)
+	}
+
+	// Unkept chat drafts and chain offers expire after DRAFT_TTL (default 24h).
+	// They live in Redis; without REDIS_URL they live in process memory and
+	// are lost on restart.
+	draftTTL := 24 * time.Hour
+	if v := os.Getenv("DRAFT_TTL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			logger.Fatal("DRAFT_TTL must be a positive duration like 24h", zap.String("value", v))
+		}
+		draftTTL = d
+	}
+	var draftStore conversationsvc.DraftStore
+	if rdb != nil {
+		draftStore = draftstore.NewRedis(rdb, draftTTL)
+	} else {
+		logger.Warn("REDIS_URL not set — chat drafts are kept in memory and lost on restart")
+		draftStore = draftstore.NewMemory(draftTTL)
 	}
 
 	// Conversation service
@@ -155,6 +177,7 @@ func main() {
 		workTypes,
 		draftSvc,
 		remoraWriter,
+		draftStore,
 		ollamaLLM,
 		resourceCache,
 		logger,

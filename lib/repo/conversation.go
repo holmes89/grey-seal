@@ -191,7 +191,7 @@ func (r *ConversationRepo) Create(ctx context.Context, b *greysealv1.Conversatio
 		resourceUUIDs = []string{}
 	}
 	_, err := sq.StatementBuilder.PlaceholderFormat(sq.Dollar).Insert("conversations").
-		Columns("uuid", "title", "work_type", "resource_uuids", "summary", "created_at", "updated_at", "pending_chain_offer", "pending_chain_offer_source").
+		Columns("uuid", "title", "work_type", "resource_uuids", "summary", "created_at", "updated_at").
 		Values(
 			b.Uuid,
 			b.Title,
@@ -199,9 +199,7 @@ func (r *ConversationRepo) Create(ctx context.Context, b *greysealv1.Conversatio
 			pq.Array(resourceUUIDs),
 			b.Summary,
 			b.CreatedAt.AsTime(),
-			b.UpdatedAt.AsTime(),
-			b.PendingChainOffer,
-			b.PendingChainOfferSource).
+			b.UpdatedAt.AsTime()).
 		RunWith(r.conn).Exec()
 	return err
 }
@@ -216,9 +214,6 @@ func (r *ConversationRepo) Update(ctx context.Context, id string, b *greysealv1.
 		Set("work_type", sq.Expr("COALESCE(NULLIF(?, ''), work_type)", b.WorkType)).
 		Set("resource_uuids", pq.Array(resourceUUIDs)).
 		Set("summary", b.Summary).
-		// Written as-is: an empty value clears the offer.
-		Set("pending_chain_offer", b.PendingChainOffer).
-		Set("pending_chain_offer_source", b.PendingChainOfferSource).
 		Set("updated_at", b.UpdatedAt.AsTime()).
 		Where(sq.Eq{"uuid": id}).
 		PlaceholderFormat(sq.Dollar).
@@ -248,7 +243,7 @@ func (r *ConversationRepo) Get(ctx context.Context, id string) (*greysealv1.Conv
 	var updatedAtDt time.Time
 	err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
-		Select("uuid", "title", "work_type", "resource_uuids", "summary", "created_at", "updated_at", "pending_chain_offer", "pending_chain_offer_source").
+		Select("uuid", "title", "work_type", "resource_uuids", "summary", "created_at", "updated_at").
 		From("conversations").
 		Where(sq.Eq{"uuid": id}).
 		RunWith(r.conn).
@@ -261,8 +256,6 @@ func (r *ConversationRepo) Get(ctx context.Context, id string) (*greysealv1.Conv
 			&conversation.Summary,
 			&createdAtDt,
 			&updatedAtDt,
-			&conversation.PendingChainOffer,
-			&conversation.PendingChainOfferSource,
 		)
 	if err != nil {
 		fmt.Println("error getting conversation", err)
@@ -282,7 +275,7 @@ func (r *ConversationRepo) Get(ctx context.Context, id string) (*greysealv1.Conv
 func (r *ConversationRepo) List(ctx context.Context, cursor string, limit uint, filter map[string][]any) ([]*greysealv1.Conversation, error) {
 	rows, err := sq.StatementBuilder.
 		PlaceholderFormat(sq.Dollar).
-		Select("uuid", "title", "work_type", "resource_uuids", "summary", "created_at", "updated_at", "pending_chain_offer", "pending_chain_offer_source").
+		Select("uuid", "title", "work_type", "resource_uuids", "summary", "created_at", "updated_at").
 		From("conversations").
 		OrderBy("updated_at DESC").
 		RunWith(r.conn).
@@ -306,8 +299,6 @@ func (r *ConversationRepo) List(ctx context.Context, cursor string, limit uint, 
 			&conversation.Summary,
 			&createdAtDt,
 			&updatedAtDt,
-			&conversation.PendingChainOffer,
-			&conversation.PendingChainOfferSource,
 		)
 		if err != nil {
 			fmt.Println("error scanning conversation", err)

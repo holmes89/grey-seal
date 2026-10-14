@@ -30,23 +30,16 @@ func (srv *conversationService) offerChain(ctx context.Context, conv *greysealv1
 		return
 	}
 
+	// Record the offer first: the message below promises it, and a promise
+	// with nothing behind it is what made "yes" fall through to the old type.
+	if err := srv.drafts.PutOffer(ctx, conv.Uuid, ChainOffer{WorkType: next.ID, Source: keptContent}); err != nil {
+		srv.logger.Warn("failed to record chain offer", zap.String("conversation_uuid", conv.Uuid), zap.Error(err))
+		return
+	}
 	offer := srv.newAssistantMessage(conv.Uuid, fmt.Sprintf("Would you like me to move onto %s next?", next.Label))
 	if err := srv.messageRepo.Create(ctx, offer); err != nil {
 		srv.logger.Warn("failed to save chain offer", zap.String("conversation_uuid", conv.Uuid), zap.Error(err))
-		return
-	}
-	err := srv.conversationRepo.Update(ctx, conv.Uuid, &greysealv1.Conversation{
-		Uuid:                    conv.Uuid,
-		Title:                   conv.Title,
-		WorkType:                conv.WorkType,
-		ResourceUuids:           conv.ResourceUuids,
-		Summary:                 conv.Summary,
-		PendingChainOffer:       next.ID,
-		PendingChainOfferSource: keptContent,
-		UpdatedAt:               timestamppb.New(time.Now()),
-	})
-	if err != nil {
-		srv.logger.Warn("failed to record chain offer", zap.String("conversation_uuid", conv.Uuid), zap.Error(err))
+		_ = srv.drafts.DeleteOffer(ctx, conv.Uuid)
 	}
 }
 
@@ -54,21 +47,20 @@ func (srv *conversationService) offerChain(ctx context.Context, conv *greysealv1
 // when the conversation has no pending offer, in which case the caller
 // should fall through to its normal handling of content.
 func (srv *conversationService) resolveChainOffer(ctx context.Context, conv *greysealv1.Conversation, content string, stream func(token string) error) (msg *greysealv1.Message, ok bool, err error) {
-	if conv.PendingChainOffer == "" {
+	offer, found, err := srv.drafts.GetOffer(ctx, conv.Uuid)
+	if err != nil {
+		// Without the store we cannot tell; do not block ordinary chat.
+		srv.logger.Warn("failed to load chain offer", zap.String("conversation_uuid", conv.Uuid), zap.Error(err))
 		return nil, false, nil
 	}
-	offeredID := conv.PendingChainOffer
-	source := conv.PendingChainOfferSource
-
-	cleared := &greysealv1.Conversation{
-		Uuid:          conv.Uuid,
-		Title:         conv.Title,
-		WorkType:      conv.WorkType,
-		ResourceUuids: conv.ResourceUuids,
-		Summary:       conv.Summary,
-		UpdatedAt:     timestamppb.New(time.Now()),
+	if !found {
+		return nil, false, nil
 	}
-	if err := srv.conversationRepo.Update(ctx, conv.Uuid, cleared); err != nil {
+	offeredID := offer.WorkType
+	source := offer.Source
+
+	// An offer is answered once, whatever the reply.
+	if err := srv.drafts.DeleteOffer(ctx, conv.Uuid); err != nil {
 		return nil, true, fmt.Errorf("failed to clear chain offer: %w", err)
 	}
 

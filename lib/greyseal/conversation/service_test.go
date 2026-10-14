@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/holmes89/grey-seal/lib/greyseal/draft"
 	draftmocks "github.com/holmes89/grey-seal/lib/greyseal/draft/mocks"
 	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
+	"github.com/holmes89/grey-seal/lib/repo/draftstore"
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
@@ -25,6 +27,7 @@ type ConversationServiceTestSuite struct {
 	searcher *mocks.MockSearcher
 	types    worktype.Registry
 	drafter  *draftmocks.MockDraftService
+	store    *draftstore.Memory
 	llm      *mocks.MockLLM
 	svc      conversation.ConversationService
 }
@@ -37,9 +40,10 @@ func (s *ConversationServiceTestSuite) SetupTest() {
 	s.Require().NoError(err)
 	s.types = types
 	s.drafter = draftmocks.NewMockDraftService(s.T())
+	s.store = draftstore.NewMemory(time.Hour)
 	s.llm = mocks.NewMockLLM(s.T())
 	// nil cache — tests that need it create their own service instance
-	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.types, s.drafter, nil, s.llm, nil, zap.NewNop(), nil)
+	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, s.searcher, s.types, s.drafter, nil, s.store, s.llm, nil, zap.NewNop(), nil)
 }
 
 func (s *ConversationServiceTestSuite) TestList() {
@@ -141,25 +145,20 @@ func (s *ConversationServiceTestSuite) TestChat_PendingMatchSetsWorkTypeWithoutL
 
 func (s *ConversationServiceTestSuite) TestChat_AcceptsChainOfferAndDraftsFromSeed() {
 	seed := "# Feature Discovery: Notes\n\n## Overview\nSomething."
-	conv := &v1.Conversation{
-		Uuid: "conv-chain", Title: "", WorkType: "discovery",
-		PendingChainOffer: "design", PendingChainOfferSource: seed,
-	}
+	conv := &v1.Conversation{Uuid: "conv-chain", Title: "", WorkType: "discovery"}
+	s.Require().NoError(s.store.PutOffer(context.Background(), "conv-chain", conversation.ChainOffer{WorkType: "design", Source: seed}))
 	s.convRepo.On("Get", mock.Anything, "conv-chain").Return(conv, nil)
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
 		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
 	})).Return(nil).Once()
 	s.convRepo.On("Update", mock.Anything, "conv-chain", mock.MatchedBy(func(c *v1.Conversation) bool {
-		return c.PendingChainOffer == "" && c.WorkType == "discovery"
-	})).Return(nil).Once()
-	s.convRepo.On("Update", mock.Anything, "conv-chain", mock.MatchedBy(func(c *v1.Conversation) bool {
-		return c.PendingChainOffer == "" && c.WorkType == "design"
+		return c.WorkType == "design"
 	})).Return(nil).Once()
 	s.drafter.On("Draft", mock.Anything, mock.MatchedBy(func(r draft.DraftRequest) bool {
 		return r.Kind == draft.KindDesign && r.Source == seed && r.Current == ""
 	}), mock.Anything).Return(&draft.Result{Body: "# Design: Notes"}, nil)
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
-		return m.DraftKind == "design" && m.Content == "# Design: Notes"
+		return m.DraftKind == "design" && m.Content == ""
 	})).Return(nil).Once()
 
 	msg, err := s.svc.Chat(context.Background(), "conv-chain", "yes", func(string) error { return nil })
@@ -169,16 +168,11 @@ func (s *ConversationServiceTestSuite) TestChat_AcceptsChainOfferAndDraftsFromSe
 }
 
 func (s *ConversationServiceTestSuite) TestChat_DecliningChainOfferFallsThroughToNormalDraftHandling() {
-	conv := &v1.Conversation{
-		Uuid: "conv-chain2", Title: "", WorkType: "design",
-		PendingChainOffer: "tickets", PendingChainOfferSource: "# Design: X",
-	}
+	conv := &v1.Conversation{Uuid: "conv-chain2", Title: "", WorkType: "design"}
+	s.Require().NoError(s.store.PutOffer(context.Background(), "conv-chain2", conversation.ChainOffer{WorkType: "tickets", Source: "# Design: X"}))
 	s.convRepo.On("Get", mock.Anything, "conv-chain2").Return(conv, nil)
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
 		return m.Role == v1.MessageRole_MESSAGE_ROLE_USER
-	})).Return(nil).Once()
-	s.convRepo.On("Update", mock.Anything, "conv-chain2", mock.MatchedBy(func(c *v1.Conversation) bool {
-		return c.PendingChainOffer == "" && c.WorkType == "design"
 	})).Return(nil).Once()
 	s.msgRepo.On("ListByConversation", mock.Anything, "conv-chain2").Return([]*v1.Message{
 		{Uuid: "p", Role: v1.MessageRole_MESSAGE_ROLE_ASSISTANT, Content: "What would you like to design?"},
@@ -186,7 +180,7 @@ func (s *ConversationServiceTestSuite) TestChat_DecliningChainOfferFallsThroughT
 	}, nil)
 	s.drafter.On("Draft", mock.Anything, mock.Anything, mock.Anything).Return(&draft.Result{Body: "# Design: Tracker v2"}, nil)
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
-		return m.DraftKind == "design" && m.Content == "# Design: Tracker v2"
+		return m.DraftKind == "design" && m.Content == ""
 	})).Return(nil).Once()
 
 	msg, err := s.svc.Chat(context.Background(), "conv-chain2", "no thanks, not yet", func(string) error { return nil })
@@ -227,7 +221,7 @@ func (s *ConversationServiceTestSuite) TestChat_DraftTypeDraftsFromEverythingSin
 		return r.Kind == draft.KindDesign && r.Source == "A shipping tracker" && r.Current == "" && r.Title == "A shipping tracker"
 	}), mock.Anything).Return(&draft.Result{Body: "# Design: Tracker"}, nil)
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
-		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT && m.DraftKind == "design" && m.Content == "# Design: Tracker"
+		return m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT && m.DraftKind == "design" && m.Content == ""
 	})).Return(nil).Once()
 
 	msg, err := s.svc.Chat(context.Background(), "conv-d", "A shipping tracker", func(string) error { return nil })
@@ -250,7 +244,7 @@ func (s *ConversationServiceTestSuite) TestChat_DraftWithOpenQuestionsSendsAFoll
 		"| 1 | Who owns shipment status updates? | Neutral |\n"
 	s.drafter.On("Draft", mock.Anything, mock.Anything, mock.Anything).Return(&draft.Result{Body: draftBody}, nil)
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
-		return m.DraftKind == "design" && m.Content == draftBody
+		return m.DraftKind == "design" && m.Content == ""
 	})).Return(nil).Once()
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
 		return m.DraftKind == "" && m.Role == v1.MessageRole_MESSAGE_ROLE_ASSISTANT &&
@@ -302,7 +296,7 @@ func (s *ConversationServiceTestSuite) TestChat_DraftTypeFollowUpRefinesLatestDr
 		return r.Source == "Notes feature\n\nAdd a scratch pad" && r.Current == "# Feature Discovery: v1"
 	}), mock.Anything).Return(&draft.Result{Body: "# Feature Discovery: v2"}, nil)
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
-		return m.DraftKind == "discovery" && m.Content == "# Feature Discovery: v2"
+		return m.DraftKind == "discovery" && m.Content == ""
 	})).Return(nil).Once()
 
 	_, err := s.svc.Chat(context.Background(), "conv-d", "Add a scratch pad", func(string) error { return nil })
@@ -322,16 +316,19 @@ func (s *ConversationServiceTestSuite) TestChat_TicketsDraftIsStoredAsATable() {
 		{Title: "Docs", Body: "Write", DependsOn: []string{"Add endpoint"}},
 	}}, nil)
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
-		if m.DraftKind != "tickets" {
-			return false
-		}
-		got := draft.ParseProposedTickets(m.Content)
-		return len(got) == 2 && got[0].Title == "Add endpoint" && len(got[0].AcceptanceCriteria) == 2 &&
-			got[1].DependsOn[0] == "Add endpoint"
+		return m.DraftKind == "tickets" && m.Content == ""
 	})).Return(nil).Once()
 
-	_, err := s.svc.Chat(context.Background(), "conv-d", "Build the API", func(string) error { return nil })
+	msg, err := s.svc.Chat(context.Background(), "conv-d", "Build the API", func(string) error { return nil })
 	s.Require().NoError(err)
+	body, ok, err := s.store.GetDraft(context.Background(), msg.GetUuid())
+	s.Require().NoError(err)
+	s.Require().True(ok, "the table body is held in the draft store")
+	got := draft.ParseProposedTickets(body)
+	s.Require().Len(got, 2)
+	s.Equal("Add endpoint", got[0].Title)
+	s.Len(got[0].AcceptanceCriteria, 2)
+	s.Equal("Add endpoint", got[1].DependsOn[0])
 }
 
 func (s *ConversationServiceTestSuite) TestChat_DraftFailureSavesNothing() {
@@ -360,7 +357,7 @@ func (s *ConversationServiceTestSuite) TestRegenerate_DiscardsLatestDraftAndDraf
 		return r.Source == "A tracker" && r.Current == ""
 	}), mock.Anything).Return(&draft.Result{Body: "# Design: new"}, nil)
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
-		return m.Content == "# Design: new" && m.DraftKind == "design"
+		return m.Content == "" && m.DraftKind == "design"
 	})).Return(nil).Once()
 
 	msg, err := s.svc.Regenerate(context.Background(), "conv-d", func(string) error { return nil })
@@ -508,7 +505,7 @@ func (s *ConversationServiceTestSuite) TestChat_CacheHit() {
 	s.T().Skip("cache temporarily disabled — re-enable after fixing per-query keying strategy")
 	cache := mocks.NewMockResourceCache(s.T())
 	svc := conversation.NewConversationService(
-		s.convRepo, s.msgRepo, s.searcher, s.types, s.drafter, nil, s.llm, cache, zap.NewNop(), nil,
+		s.convRepo, s.msgRepo, s.searcher, s.types, s.drafter, nil, draftstore.NewMemory(time.Hour), s.llm, cache, zap.NewNop(), nil,
 	)
 
 	convUUID := "conv-cache-hit"
@@ -541,7 +538,7 @@ func (s *ConversationServiceTestSuite) TestChat_CacheMiss() {
 	s.T().Skip("cache temporarily disabled — re-enable after fixing per-query keying strategy")
 	cache := mocks.NewMockResourceCache(s.T())
 	svc := conversation.NewConversationService(
-		s.convRepo, s.msgRepo, s.searcher, s.types, s.drafter, nil, s.llm, cache, zap.NewNop(), nil,
+		s.convRepo, s.msgRepo, s.searcher, s.types, s.drafter, nil, draftstore.NewMemory(time.Hour), s.llm, cache, zap.NewNop(), nil,
 	)
 
 	convUUID := "conv-cache-miss"

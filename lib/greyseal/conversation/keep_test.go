@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/holmes89/grey-seal/lib/greyseal/conversation"
 	"github.com/holmes89/grey-seal/lib/greyseal/conversation/mocks"
 	"github.com/holmes89/grey-seal/lib/greyseal/worktype"
+	"github.com/holmes89/grey-seal/lib/repo/draftstore"
 	v1 "github.com/holmes89/grey-seal/lib/schemas/greyseal/v1"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
@@ -55,6 +57,7 @@ type KeepDraftSuite struct {
 	convRepo *mocks.MockConversationRepository
 	msgRepo  *mocks.MockMessageRepository
 	remora   *fakeRemora
+	store    *draftstore.Memory
 	svc      conversation.ConversationService
 }
 
@@ -64,11 +67,12 @@ func (s *KeepDraftSuite) SetupTest() {
 	s.convRepo = mocks.NewMockConversationRepository(s.T())
 	s.msgRepo = mocks.NewMockMessageRepository(s.T())
 	s.remora = &fakeRemora{}
+	s.store = draftstore.NewMemory(time.Hour)
 	// No work-type registry by default: offerChain is then a no-op, so the
 	// Keep-only tests don't need to mock the extra Create/Update calls it
 	// would otherwise make. Tests of the chain offer itself build their own
 	// service instance with a real registry (see offerChainSvc below).
-	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, nil, nil, nil, s.remora, nil, nil, zap.NewNop(), nil)
+	s.svc = conversation.NewConversationService(s.convRepo, s.msgRepo, nil, nil, nil, s.remora, s.store, nil, nil, zap.NewNop(), nil)
 	s.convRepo.On("Get", mock.Anything, "c1").Return(&v1.Conversation{Uuid: "c1", Title: "My chat"}, nil).Maybe()
 }
 
@@ -77,7 +81,7 @@ func (s *KeepDraftSuite) SetupTest() {
 func (s *KeepDraftSuite) offerChainSvc() conversation.ConversationService {
 	types, err := worktype.Load("")
 	s.Require().NoError(err)
-	return conversation.NewConversationService(s.convRepo, s.msgRepo, nil, types, nil, s.remora, nil, nil, zap.NewNop(), nil)
+	return conversation.NewConversationService(s.convRepo, s.msgRepo, nil, types, nil, s.remora, s.store, nil, nil, zap.NewNop(), nil)
 }
 
 func (s *KeepDraftSuite) message(kind, content, kept string) {
@@ -117,13 +121,14 @@ func (s *KeepDraftSuite) TestKeepOffersChainWhenNextWorkTypeExists() {
 	s.msgRepo.On("Create", mock.Anything, mock.MatchedBy(func(m *v1.Message) bool {
 		return m.Content == "Would you like me to move onto Design next?"
 	})).Return(nil).Once()
-	s.convRepo.On("Update", mock.Anything, "c1", mock.MatchedBy(func(c *v1.Conversation) bool {
-		return c.PendingChainOffer == "design" &&
-			c.PendingChainOfferSource == "# Feature Discovery: Notes - Attach notes to any entity\n\n## Overview"
-	})).Return(nil).Once()
 
 	_, err := s.offerChainSvc().KeepDraft(context.Background(), conversation.KeepDraftInput{ConversationUUID: "c1", MessageUUID: "m1", ProductUUID: "prod"})
 	s.Require().NoError(err)
+	offer, ok, err := s.store.GetOffer(context.Background(), "c1")
+	s.Require().NoError(err)
+	s.Require().True(ok)
+	s.Equal("design", offer.WorkType)
+	s.Equal("# Feature Discovery: Notes - Attach notes to any entity\n\n## Overview", offer.Source)
 }
 
 func (s *KeepDraftSuite) TestKeepDoesNotOfferChainForATerminalWorkType() {
@@ -201,7 +206,7 @@ func (s *KeepDraftSuite) TestPlainMessageIsNotKeepable() {
 }
 
 func (s *KeepDraftSuite) TestUnavailableWithoutRemora() {
-	svc := conversation.NewConversationService(s.convRepo, s.msgRepo, nil, nil, nil, nil, nil, nil, zap.NewNop(), nil)
+	svc := conversation.NewConversationService(s.convRepo, s.msgRepo, nil, nil, nil, nil, draftstore.NewMemory(time.Hour), nil, nil, zap.NewNop(), nil)
 	_, err := svc.KeepDraft(context.Background(), conversation.KeepDraftInput{ConversationUUID: "c1", MessageUUID: "m1", ProjectUUID: "p"})
 	s.ErrorIs(err, conversation.ErrKeepUnavailable)
 }

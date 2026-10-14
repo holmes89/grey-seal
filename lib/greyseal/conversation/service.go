@@ -36,6 +36,7 @@ type conversationService struct {
 	workTypes        worktype.Registry  // optional; nil = every conversation is plain chat
 	drafter          draft.DraftService // optional; nil = drafting work types fall back to plain chat
 	remora           RemoraWriter       // optional; nil = KeepDraft is unavailable
+	drafts           DraftStore         // unkept draft bodies and chain offers (expiring)
 	llm              LLM                // optional
 	cache            ResourceCache      // optional; disables per-conversation snippet caching when nil
 	transcriptWriter TranscriptWriter   // optional; nil = no transcript
@@ -49,6 +50,7 @@ func NewConversationService(
 	workTypes worktype.Registry,
 	drafter draft.DraftService,
 	remora RemoraWriter,
+	drafts DraftStore,
 	llm LLM,
 	cache ResourceCache,
 	logger *zap.Logger,
@@ -61,6 +63,7 @@ func NewConversationService(
 		workTypes:        workTypes,
 		drafter:          drafter,
 		remora:           remora,
+		drafts:           drafts,
 		llm:              llm,
 		cache:            cache,
 		transcriptWriter: transcriptWriter,
@@ -86,6 +89,8 @@ func (srv *conversationService) Get(ctx context.Context, get base.GetRequest[*gr
 	data, err := srv.conversationRepo.Get(ctx, get.GetUuid())
 	if err != nil {
 		srv.logger.Error("failed to get conversation", zap.String("uuid", get.GetUuid()), zap.Error(err))
+	} else if data != nil {
+		srv.hydrate(ctx, data.Messages)
 	}
 	return &base.GetGenericResponse[*greysealv1.Conversation]{Data: data}, err
 }
@@ -195,7 +200,7 @@ func (srv *conversationService) Chat(ctx context.Context, conversationUUID strin
 	}
 
 	// 4. Load message history and handle overflow summarisation
-	history, err := srv.messageRepo.ListByConversation(ctx, conversationUUID)
+	history, err := srv.history(ctx, conversationUUID)
 	if err != nil {
 		history = nil // non-fatal; continue without history
 	}

@@ -58,6 +58,18 @@ func (srv *conversationService) KeepDraft(ctx context.Context, in KeepDraftInput
 	if msg.ConversationUuid != in.ConversationUUID || msg.DraftKind == "" {
 		return nil, fmt.Errorf("%w: message is not a draft in this conversation", ErrKeepInvalid)
 	}
+	if isDraftStub(msg) {
+		// The body lives in the DraftStore until kept; if it is gone the
+		// draft expired and there is nothing to write.
+		body, ok, err := srv.drafts.GetDraft(ctx, msg.Uuid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load draft: %w", err)
+		}
+		if !ok {
+			return nil, fmt.Errorf("%w: this draft expired; send your message again to draft it again", ErrKeepInvalid)
+		}
+		msg.Content = body
+	}
 	if msg.KeptRef != "" {
 		return nil, fmt.Errorf("%w: draft was already kept (%s)", ErrKeepInvalid, msg.KeptRef)
 	}
@@ -116,6 +128,7 @@ func (srv *conversationService) KeepDraft(ctx context.Context, in KeepDraftInput
 		return nil, fmt.Errorf("draft written to remora (%s) but recording it failed: %w", ref, err)
 	}
 	srv.logger.Info("draft kept", zap.String("message_uuid", msg.Uuid), zap.String("kept_ref", ref))
+	_ = srv.drafts.DeleteDraft(ctx, msg.Uuid) // the body now lives on the message
 
 	srv.offerChain(ctx, conv, msg.DraftKind, msg.Content)
 
