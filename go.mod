@@ -8,7 +8,7 @@ require (
 	github.com/XSAM/otelsql v0.42.0
 	github.com/docker/docker v28.2.2+incompatible
 	github.com/google/uuid v1.6.0
-	github.com/holmes89/archaea v0.0.0-20260401164248-604d62c1163e
+	github.com/holmes89/archaea v0.0.0-20261015010407-0d1b153319f8
 	github.com/holmes89/shrike v0.0.0-20260331200147-3636b109d52d
 	github.com/lib/pq v1.12.1
 	github.com/mark3labs/mcp-go v0.54.1
