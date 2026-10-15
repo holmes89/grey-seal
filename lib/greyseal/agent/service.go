@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -43,7 +45,14 @@ type agentService struct {
 
 	pollInterval time.Duration
 	watchTimeout time.Duration
+
+	// prRetryDelays is the wait before each retry of OpenPullRequest after a
+	// transient network failure (the run's branch is already pushed, so one
+	// DNS blip should not cost the run its PR). nil disables retries.
+	prRetryDelays []time.Duration
 }
+
+var defaultPRRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second, 15 * time.Second}
 
 func NewAgentService(runner, ollamaRunner SessionRunner, repo AgentRunRepository, prOpener PullRequestOpener, systemGithubToken string, logger *zap.Logger) AgentService {
 	return &agentService{
@@ -55,6 +64,7 @@ func NewAgentService(runner, ollamaRunner SessionRunner, repo AgentRunRepository
 		logger:            logger,
 		pollInterval:      defaultWatchPollInterval,
 		watchTimeout:      defaultWatchTimeout,
+		prRetryDelays:     defaultPRRetryDelays,
 	}
 }
 
@@ -304,7 +314,7 @@ func (srv *agentService) applyStatus(ctx context.Context, p watchParams, status,
 	//   - repoURL is file:// — beaver's local-only mode (no GitHub remote), where
 	//     the caller reads success by cloning the agent's branch directly.
 	if outcomeResult == "satisfied" && run.PrUrl == "" && p.repoURL != "" && !strings.HasPrefix(p.repoURL, "file://") {
-		prURL, err := srv.prOpener.OpenPullRequest(ctx, OpenPullRequestRequest{
+		prURL, err := srv.openPullRequestWithRetry(ctx, OpenPullRequestRequest{
 			RepoURL: p.repoURL,
 			Branch:  p.branch,
 			Base:    "main",
@@ -328,6 +338,31 @@ func (srv *agentService) applyStatus(ctx context.Context, p watchParams, status,
 	if err := srv.repo.Update(ctx, p.runUUID, run); err != nil {
 		srv.logger.Warn("agent run watcher: failed to persist run", zap.String("uuid", p.runUUID), zap.Error(err))
 	}
+}
+
+// openPullRequestWithRetry retries OpenPullRequest only for transient network
+// errors (DNS, connection, timeout). API-level failures such as a 422 for an
+// existing PR are returned immediately.
+func (srv *agentService) openPullRequestWithRetry(ctx context.Context, req OpenPullRequestRequest) (string, error) {
+	for attempt := 0; ; attempt++ {
+		prURL, err := srv.prOpener.OpenPullRequest(ctx, req)
+		if err == nil || !isTransientNetworkError(err) || attempt >= len(srv.prRetryDelays) {
+			return prURL, err
+		}
+		srv.logger.Warn("agent run watcher: transient error opening pull request, retrying",
+			zap.Int("attempt", attempt+1), zap.Duration("wait", srv.prRetryDelays[attempt]), zap.Error(err))
+		select {
+		case <-ctx.Done():
+			return "", err
+		case <-time.After(srv.prRetryDelays[attempt]):
+		}
+	}
+}
+
+func isTransientNetworkError(err error) bool {
+	var netErr net.Error
+	var dnsErr *net.DNSError
+	return errors.As(err, &dnsErr) || errors.As(err, &netErr)
 }
 
 // GetAgentRun refreshes the run's status from the live provider session

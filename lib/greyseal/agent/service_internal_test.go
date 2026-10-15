@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -370,5 +372,65 @@ func TestListAgentRuns_StatusFilter_OnlyMatchingReturned(t *testing.T) {
 		if r.GetStatus() != "running" {
 			t.Fatalf("expected only running runs, got one with status %q", r.GetStatus())
 		}
+	}
+}
+
+// flakyPROpener fails with err for the first failures calls, then succeeds.
+type flakyPROpener struct {
+	mu       sync.Mutex
+	calls    int
+	failures int
+	err      error
+}
+
+func (f *flakyPROpener) OpenPullRequest(_ context.Context, _ OpenPullRequestRequest) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	if f.calls <= f.failures {
+		return "", f.err
+	}
+	return "https://github.com/holmes89/blue-whale/pull/3", nil
+}
+
+func watchSatisfied(t *testing.T, pr PullRequestOpener) *fakeRepo {
+	t.Helper()
+	repo := newFakeRepo(&greysealv1.AgentRun{Uuid: "run-1"})
+	svc := newTestService(&fakeRunner{statusSequence: []statusResult{{"idle", "satisfied"}}}, repo, nil)
+	svc.prOpener = pr
+	svc.prRetryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
+	svc.watchForCompletion(context.Background(), watchParams{
+		runUUID: "run-1", sessionID: "session-123",
+		githubToken: "tok", repoURL: "https://github.com/holmes89/blue-whale",
+		branch: "agent/run-1", title: "t", body: "b",
+	})
+	return repo
+}
+
+func TestWatchForCompletion_RetriesTransientDNSFailure(t *testing.T) {
+	dns := &net.DNSError{Err: "server misbehaving", Name: "api.github.com", IsTemporary: true}
+	pr := &flakyPROpener{failures: 2, err: fmt.Errorf("create pull request: %w", dns)}
+
+	repo := watchSatisfied(t, pr)
+
+	if pr.calls != 3 {
+		t.Fatalf("expected 3 attempts, got %d", pr.calls)
+	}
+	run := repo.latest("run-1")
+	if run.GetPrUrl() == "" || run.GetError() != "" {
+		t.Fatalf("expected PR recorded and no error, got url=%q err=%q", run.GetPrUrl(), run.GetError())
+	}
+}
+
+func TestWatchForCompletion_DoesNotRetryAPIErrors(t *testing.T) {
+	pr := &flakyPROpener{failures: 5, err: errors.New("create pull request returned status 422: already exists")}
+
+	repo := watchSatisfied(t, pr)
+
+	if pr.calls != 1 {
+		t.Fatalf("expected a single attempt for a non-network error, got %d", pr.calls)
+	}
+	if repo.latest("run-1").GetError() == "" {
+		t.Fatal("expected the error to be recorded on the run")
 	}
 }
